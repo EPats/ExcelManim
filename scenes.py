@@ -2,7 +2,7 @@ from manim import *
 
 
 def create_narration_circle(scene: Scene) -> None:
-    c = Circle(radius=1, color=YELLOW_E, fill_color=YELLOW_E, fill_opacity=1).to_corner(UR)
+    c = Circle(radius=1, color=YELLOW_E, fill_color=YELLOW_E, fill_opacity=1).to_corner(UR, buff=0.2)
     scene.add(c)
 
 
