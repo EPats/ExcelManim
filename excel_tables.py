@@ -4,16 +4,17 @@ from manim import *
 import re
 import excel_helpers as helpers
 from excel_constants import *
+from excel_formula import ExcelFormula
 
 
 class ExcelTable(MobjectTable):
     def __init__(self, table_data_strings: list[list[str]], sheet_name: str = '',
                  broken_column_groups: list[list[str]] = None,
-                 broken_row_groups: list[list[str]] = None,
+                 broken_row_groups: list[list[str]] = None, tex_color: ManimColor = BLACK,
                  element_to_mobject: Callable[[VMobject], VMobject] = lambda m: m, **kwargs):
 
         def create_tex_cells(data: list[list[str]]) -> list[list[Tex]]:
-            return [[Tex(cell).set_color(BLACK) for cell in row] for row in data]
+            return [[Tex(cell).set_color(tex_color) for cell in row] for row in data]
 
         def create_labels(size: int, start: int, is_column: bool = True) -> list[Text]:
             return [Text(chr(64 + i), weight='BOLD') if is_column else Text(str(i), weight='BOLD')
@@ -94,15 +95,26 @@ class ExcelTable(MobjectTable):
                 opacity = 0.4 if i in blank_row_indices or j in blank_col_indices else 0.8
                 self.add_highlighted_cell((i, j), WHITE, fill_opacity=opacity)
 
-    def get_draw_animation(self) -> Animation:
+    def get_draw_animation(self, hidden_data: list[tuple[int, int]] = None) -> Animation:
         background_rectangles = VGroup(
             *[mob for mob in self.submobjects if mob.name == "BackgroundRectangle"][::-1])
-        rows = [row[1:] for row in self.get_rows()[1:]]
+
         top_left = self.top_left_entry
         headers_col = self.get_col_labels()
         headers_row = self.get_row_labels()
         lines = self.get_vertical_lines()
         lines.add(self.get_horizontal_lines())
+
+        if hidden_data:
+            rows = []
+            for i, row in enumerate(self.get_rows()[1:], start=1):
+                current_row = VGroup()
+                for j, el in enumerate(row[1:], start=1):
+                    if (i, j) not in hidden_data:
+                        current_row.add(row[j])
+                rows.append(current_row)
+        else:
+            rows = [row[1:] for row in self.get_rows()[1:]]
 
         anims = []
         if top_left:
@@ -193,6 +205,17 @@ class ExcelTable(MobjectTable):
         rectangle = helpers.change_path_to_top_left_clockwise(rectangle)
 
         return ShowPassingFlash(rectangle, time_width=time_width, run_time=run_time)
+
+    def animate_flash_fill(self, range_str: str, lagged_animations: list[Animation] = None, n_squares: int = 3) -> LaggedStart:
+        start_cell, end_cell = self.get_start_end_cells_for_range(range_str)
+        start_dr = start_cell.get_corner(DR)
+        sq = Square(side_length=0.3, color=EP_EXCEL_GREEN, stroke_width=2).move_to(start_dr)
+
+        square_anims = [sq.copy().animate.scale(0.001).set_stroke(opacity=0) for _ in range(n_squares)]
+        square_anim = LaggedStart(*square_anims, lag_ratio=0.2)
+        if lagged_animations:
+            return LaggedStart(square_anim, *lagged_animations, lag_ratio=0.2)
+        return square_anim
 
 
 def results_table(table_data_strings: list[list[str]], h_buff: float = 1.3, v_buff: float = 0.8,

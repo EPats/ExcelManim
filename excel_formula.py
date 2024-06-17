@@ -24,8 +24,10 @@ FORMULA_REPLACEMENTS: dict[str, str] = {
 
 class ExcelFormula(VGroup):
     def __init__(self, formula: str, start_location: Vector3D = DEFAULT_FORMULA_START_LOCATION, scale: float = 0.7,
-                 color_offset: int = 0,
-                 tables_list: list[tables.ExcelTable] = None, dynamic_ranges: dict[str, str] = None, **kwargs):
+                 color_offset: int = 0, tables_list: list = None, split_lines: bool = True, target_cell: str = '',
+                 dynamic_ranges: dict[str, str] = None, tex_color: ManimColor = WHITE, start_align: Vector3D = LEFT,
+                 **kwargs):
+
         self.tables = {table.sheet_name: table for table in tables_list} if tables_list else {}
 
         def parse_excel_formula(formula: str) -> list[tuple[str, str]]:
@@ -78,9 +80,10 @@ class ExcelFormula(VGroup):
             if token_type == 'string_argument':
                 token_value = f'``{token_value[1:]}'
             elif token_type == 'blank_argument':
-                token_value = '\_'
+                token_value = '  '
 
-            token_value = token_value.replace(',', ',\n')
+            if split_lines:
+                token_value = token_value.replace(',', ',\n')
 
             for k in FORMULA_REPLACEMENTS:
                 token_value = token_value.replace(k, FORMULA_REPLACEMENTS[k])
@@ -91,13 +94,14 @@ class ExcelFormula(VGroup):
             result = []
             current_line = []
 
+            new_line_list = ['nested_function', 'force_new_line'] if split_lines else ['force_new_line']
             for i, token in enumerate(tokens):
-                if (token[0] in ['nested_function', 'force_new_line'] or
-                        (token[0] == 'parentheses_close' and tokens[i - 1][0] == 'parentheses_close')):
+                if (token[0] in new_line_list or
+                        (token[0] == 'parentheses_close' and tokens[i - 1][0] == 'parentheses_close' and split_lines)):
                     if current_line:
                         result.append(current_line)
                     current_line = [] if token[0] == 'force_new_line' else [clean_string(token)]
-                elif token[0] == 'comma':
+                elif token[0] == 'comma' and split_lines:
                     if current_line:
                         current_line.append(clean_string(token))
                         result.append(current_line)
@@ -119,8 +123,9 @@ class ExcelFormula(VGroup):
 
         tex_mob_line: Tex
         for i, tex_mob_line in enumerate(tex_mob_lines):
+            tex_mob_line.set_color(tex_color)
             if i == 0:
-                tex_mob_line.move_to(start_location, aligned_edge=LEFT)
+                tex_mob_line.move_to(start_location, aligned_edge=start_align)
             else:
                 tex_mob_line.next_to(tex_mob_lines[i - 1], DOWN)
 
@@ -156,13 +161,37 @@ class ExcelFormula(VGroup):
 
         self.highlights: dict[str, Rectangle] = highlights
         self.highlight_objs = VGroup(*self.highlights.values())
+        self.target_cell = target_cell
+
         super().__init__(*tex_mob_lines, **kwargs)
+
+        if self.target_cell:
+            table = list(self.tables.values())[0] if len(self.tables) == 1 \
+                else self.tables[self.target_cell.split('!')[0]]
+
+            start_cell, end_cell = table.get_start_end_cells_for_range(self.target_cell)
+            formula_box = SurroundingRectangle(start_cell, color=BLACK, stroke_opacity=0, buff=0)
+            formula_box_2 = Rectangle(width=self.get_true_width() + 0.2 * 2,
+                                                   height=self.get_true_height() + 0.2 * 2,
+                                                   color=WHITE).move_to(self).shift(UP * 0.02)
+
+            self.z_index = 1
+            self.formula_box = VGroup(formula_box, formula_box_2)
 
     def get_all_objects(self):
         return self.submobjects + self.highlight_objs.submobjects
 
     def write_to_scene(self, run_time: float = 1.5, gap_between: float = 0.3) -> Animation:
         all_animations = []
+
+        if self.target_cell:
+            table = list(self.tables.values())[0] if len(self.tables) == 1 \
+                else self.tables[self.target_cell.split('!')[0]]
+            highlight_anim = table.get_passing_flash(range_str=self.target_cell, flash_color=BLACK, stroke_width=2.5)
+            type_anims = LaggedStart(highlight_anim, Transform(self.formula_box[0], self.formula_box[1]),
+                                lag_ratio=0.2)
+            all_animations.append(type_anims)
+
         for i, tex_line in enumerate(self):
             tex: Tex
             for j, tex in enumerate(tex_line):
@@ -194,3 +223,9 @@ class ExcelFormula(VGroup):
             highlight_transformations += [Create(list(new_formula.highlights.values())[i]) for i in range(k, n)]
 
         return AnimationGroup(transform_text, *highlight_transformations)
+
+    def get_true_width(self):
+        return max([line.get_right()[0] for line in self]) - self[0].get_left()[0]
+
+    def get_true_height(self):
+        return self[0].get_top()[1] - self[-1].get_bottom()[1]
