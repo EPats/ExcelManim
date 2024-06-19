@@ -103,17 +103,6 @@ class XLookup2DExample(Scene):
         self.wait(2)
 
 
-class qt(Scene):
-    def construct(self):
-        f = ExcelFormula('=XLOOKUP("Test")')
-        self.play(f.write_to_scene())
-        self.wait(2)
-        self.play(Indicate(f[0][2]))
-        self.wait(2)
-        self.play(FadeOut(f))
-        self.wait(2)
-
-
 class VLookup(Scene):
     def construct(self):
         v_lookup = Tex('VLOOKUP').to_edge(UP)

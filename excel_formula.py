@@ -45,7 +45,11 @@ class ExcelFormula(VGroup):
                 'range_argument': r'(([A-Za-z0-9_]+!){0,1}\${0,1}[A-Z]+\${0,1}[0-9]+:\${0,1}[A-Z]+\${0,1}[0-9]+)'
                                   r'|'
                                   r'(([A-Za-z0-9_]+!){0,1}\${0,1}[A-Z]+\${0,1}[0-9]+)',
-                'dynamic_range_argument': r'\${0,1}[A-Z]+\${0,1}[0-9]+#{0,1}',
+                'dynamic_range_argument': r'\${0,1}[A-Z]+\${0,1}[0-9]+#{0,1}'
+                                          r'|'
+                                          r'([A-Za-z0-9_]+\[[A-Za-z0-9_]+\])'
+                                          r'|'
+                                          r'![A-Za-z0-9_]+!',
                 'named_argument': r'\[{0,1}[A-Za-z0-9_]+\]{0,1}',
                 'comma': r',',
                 'unary_operator': r'--',
@@ -81,7 +85,8 @@ class ExcelFormula(VGroup):
                 token_value = f'``{token_value[1:]}'
             elif token_type == 'blank_argument':
                 token_value = '  '
-
+            elif token_type == 'dynamic_range_argument' and token_value[0] == '!':
+                token_value = token_value[1:-1]
             if split_lines:
                 token_value = token_value.replace(',', ',\n')
 
@@ -162,6 +167,7 @@ class ExcelFormula(VGroup):
         self.highlights: dict[str, Rectangle] = highlights
         self.highlight_objs = VGroup(*self.highlights.values())
         self.target_cell = target_cell
+        self.formula_box = VGroup()
 
         super().__init__(*tex_mob_lines, **kwargs)
 
@@ -176,10 +182,13 @@ class ExcelFormula(VGroup):
                                                    color=WHITE).move_to(self).shift(UP * 0.02)
 
             self.z_index = 1
-            self.formula_box = VGroup(formula_box, formula_box_2)
+            self.formula_box.add(formula_box, formula_box_2)
 
     def get_all_objects(self):
-        return self.submobjects + self.highlight_objs.submobjects
+        return self.submobjects + self.highlight_objs.submobjects + self.formula_box.submobjects
+
+    def fade_out(self):
+        return AnimationGroup(*[FadeOut(mob) for mob in self.get_all_objects()])
 
     def write_to_scene(self, run_time: float = 1.5, gap_between: float = 0.3) -> Animation:
         all_animations = []
@@ -195,7 +204,7 @@ class ExcelFormula(VGroup):
         for i, tex_line in enumerate(self):
             tex: Tex
             for j, tex in enumerate(tex_line):
-                t = min(0.2 + len(tex.tex_string) * 0.2, run_time)
+                t = min(len(tex.tex_string) * 0.2, run_time)
                 animations = [Write(tex).set_run_time(t)]
                 if self.highlights and f'{i}:{j}' in self.highlights:
                     animations.append(Create(self.highlights[f'{i}:{j}']).set_run_time(t))
@@ -220,7 +229,7 @@ class ExcelFormula(VGroup):
         if n > m:
             highlight_transformations += [FadeOut(list(self.highlights.values())[i]) for i in range(k, n)]
         elif m > n:
-            highlight_transformations += [Create(list(new_formula.highlights.values())[i]) for i in range(k, n)]
+            highlight_transformations += [Create(list(new_formula.highlights.values())[i]) for i in range(k, m)]
 
         return AnimationGroup(transform_text, *highlight_transformations)
 

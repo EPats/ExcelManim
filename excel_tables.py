@@ -4,7 +4,6 @@ from manim import *
 import re
 import excel_helpers as helpers
 from excel_constants import *
-from excel_formula import ExcelFormula
 
 
 class ExcelTable(MobjectTable):
@@ -95,6 +94,16 @@ class ExcelTable(MobjectTable):
                 opacity = 0.4 if i in blank_row_indices or j in blank_col_indices else 0.8
                 self.add_highlighted_cell((i, j), WHITE, fill_opacity=opacity)
 
+    def add_named_table(self, table_range: str, color1: ManimColor = BLUE, color2: ManimColor = BLUE_A,
+                        title_color: ManimColor = BLUE_E) -> None:
+        start_cell_indices, end_cell_indices = self.get_start_cell_end_cell_indices(table_range)
+        for i in range(start_cell_indices[0], end_cell_indices[0] + 1):
+            for j in range(start_cell_indices[1], end_cell_indices[1] + 1):
+                opacity = 0.8
+                color = title_color if i == start_cell_indices[0] \
+                    else color2 if i % 2 == start_cell_indices[0] % 2 else color1
+                self.add_highlighted_cell((i, j), color, fill_opacity=opacity)
+
     def get_draw_animation(self, hidden_data: list[tuple[int, int]] = None) -> Animation:
         background_rectangles = VGroup(
             *[mob for mob in self.submobjects if mob.name == "BackgroundRectangle"][::-1])
@@ -135,8 +144,7 @@ class ExcelTable(MobjectTable):
         # anims.play()
         # scene.add(top_left)
 
-    def get_start_end_cells_for_range(self, range_str: str) -> (Polygon, Polygon):
-        # Extract row and column information from the range string
+    def get_start_cell_end_cell_indices(self, range_str: str) -> tuple:
         if '!' in range_str:
             range_str = range_str.split('!')[1]
 
@@ -153,9 +161,14 @@ class ExcelTable(MobjectTable):
         start_col = col_labels.index(cols[0]) + 2
         end_col = col_labels.index(cols[-1]) + 2
 
+        return (start_row, start_col), (end_row, end_col)
+
+    def get_start_end_cells_for_range(self, range_str: str) -> (Polygon, Polygon):
+        start_cell_indices, end_cel_indicesl = self.get_start_cell_end_cell_indices(range_str)
+
         # Get the top-left and bottom-right corners of the specified cell range
-        start_cell = self.get_cell((start_row, start_col))
-        end_cell = self.get_cell((end_row, end_col))
+        start_cell = self.get_cell((start_cell_indices[0], start_cell_indices[1]))
+        end_cell = self.get_cell((end_cel_indicesl[0], end_cel_indicesl[1]))
 
         return start_cell, end_cell
 
