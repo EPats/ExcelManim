@@ -21,6 +21,8 @@ FORMULA_REPLACEMENTS: dict[str, str] = {
     '$': '\\verb|$|'
 }
 
+REVERSED_FORMULA_REPLACEMENTS: dict[str, str] = {v: k for k, v in FORMULA_REPLACEMENTS.items()}
+
 
 class ExcelFormula(VGroup):
     def __init__(self, formula: str, start_location: Vector3D = DEFAULT_FORMULA_START_LOCATION, scale: float = 0.7,
@@ -124,6 +126,7 @@ class ExcelFormula(VGroup):
         tex_mob_lines: list[Tex] = [Tex(*[token[1] for token in line]).scale(scale) for line in line_tokens]
 
         highlights: dict = {}
+        highlight_names_to_colors = {}
         parentheses_open: list = []
 
         tex_mob_line: Tex
@@ -147,24 +150,34 @@ class ExcelFormula(VGroup):
             for j, tex_mob in enumerate(tex_mob_line):
                 match token_type := line_tokens[i][j][0]:
                     case 'range_argument' | 'dynamic_range_argument':
+                        token_value = line_tokens[i][j][1]
+                        if token_value in highlight_names_to_colors:
+                            range_color = highlight_names_to_colors[token_value]
+                            tex_mob.set_color(range_color)
+                            continue
+
                         range_color = RANGE_COLORS[(color_offset + len(highlights)) % len(RANGE_COLORS)]
                         tex_mob.set_color(range_color)
                         if self.tables:
-                            token_value = line_tokens[i][j][1]
                             table = list(self.tables.values())[0] if len(self.tables) == 1 \
                                 else self.tables[token_value.split('!')[0]]
 
+                            dynamic_key = token_value
+                            for k in REVERSED_FORMULA_REPLACEMENTS:
+                                dynamic_key = dynamic_key.replace(k, REVERSED_FORMULA_REPLACEMENTS[k])
                             range_highlight_address = token_value if token_type == 'range_argument' \
-                                else dynamic_ranges[token_value]
+                                else dynamic_ranges[dynamic_key]
                             range_highlight = table.highlight_table_range(range_str=range_highlight_address,
                                                                           highlight_color=range_color)
                             highlights[f'{i}:{j}'] = range_highlight
+                            highlight_names_to_colors[token_value] = range_color
                     case 'parentheses_open':
                         parentheses_open.append((tex_mob, (i, j)))
                     case 'parentheses_close':
                         parentheses_open.pop()
 
         self.highlights: dict[str, Rectangle] = highlights
+        print(len(self.highlights))
         self.highlight_objs = VGroup(*self.highlights.values())
         self.target_cell = target_cell
         self.formula_box = VGroup()

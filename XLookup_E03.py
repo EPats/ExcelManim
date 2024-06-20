@@ -173,7 +173,18 @@ class NamedRangeTableExample(NarratedScene):
             ['December', '12000']
         ]
 
-        table = ExcelTable(table_data).scale(0.25).to_corner(DL)
+        extra_data = [table_data[0], table_data[6]]
+        table_data = [table_data[i] + ([''] + extra_data[i] if i < len(extra_data) else [''] * 3)
+                      for i in range(len(table_data))]
+
+        table = ExcelTable(table_data).scale(0.4).to_corner(DL)
         table.add_named_table('A3:B8')
         self.play(table.get_draw_animation())
         self.wait(2)
+        formula_str = '=TEST(Table1[Sales], !MyNamedRange!)'
+        dynamic_ranges = {'Table1[Sales]': 'A2:A13',
+                          'MyNamedRange': 'B2:B13'}
+        formula = ExcelFormula(formula_str, tables_list=[table], target_cell='D3', start_align=LEFT + UP,
+                               start_location=UP+RIGHT*1, dynamic_ranges=dynamic_ranges)
+        self.play(formula.write_to_scene())
+        self.wait(4)

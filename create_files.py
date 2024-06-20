@@ -13,7 +13,7 @@ def prototype(proto_scene, quality: str = 'low') -> None:
         proto_scene().render()
 
 
-def create_multiple_scenes(scene_classes: list[manim.Scene]) -> None:
+def create_multiple_scenes(scene_classes: list) -> None:
     for new_scene in scene_classes:
         new_scene().render()
 
@@ -25,6 +25,10 @@ def create_all_scenes_in_module(module: object) -> None:
 
 
 if __name__ == '__main__':
-    prototype(XLookup_E03.NamedRangeTableExample)
+    current_scene = XLookup_E02.SearchModesExplained
+
+    # prototype(current_scene)
+    create_multiple_scenes([current_scene])
+    # create_multiple_scenes([XLookup_E02.SearchModesExample, XLookup_E02.NotFoundExample2])
     # create_all_scenes_in_module(XLookup_E02)
-    # create_multiple_scenes([XLookup_E02.DynamicArraysExample])
+
