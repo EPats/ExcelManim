@@ -18,7 +18,8 @@ FORMULA_REPLACEMENTS: dict[str, str] = {
     '>': '\\verb|>|',
     '--': '\\verb|--|',
     ',': ',\n',
-    '$': '\\verb|$|'
+    '$': '\\verb|$|',
+    '~': '\\verb|~|'
 }
 
 REVERSED_FORMULA_REPLACEMENTS: dict[str, str] = {v: k for k, v in FORMULA_REPLACEMENTS.items()}
@@ -151,8 +152,10 @@ class ExcelFormula(VGroup):
                 match token_type := line_tokens[i][j][0]:
                     case 'range_argument' | 'dynamic_range_argument':
                         token_value = line_tokens[i][j][1]
-                        if token_value in highlight_names_to_colors:
-                            range_color = highlight_names_to_colors[token_value]
+
+                        clean_range_argument = token_value.replace('\\verb|$|', '')
+                        if clean_range_argument in highlight_names_to_colors:
+                            range_color = highlight_names_to_colors[clean_range_argument]
                             tex_mob.set_color(range_color)
                             continue
 
@@ -170,7 +173,7 @@ class ExcelFormula(VGroup):
                             range_highlight = table.highlight_table_range(range_str=range_highlight_address,
                                                                           highlight_color=range_color)
                             highlights[f'{i}:{j}'] = range_highlight
-                            highlight_names_to_colors[token_value] = range_color
+                            highlight_names_to_colors[clean_range_argument] = range_color
                     case 'parentheses_open':
                         parentheses_open.append((tex_mob, (i, j)))
                     case 'parentheses_close':
