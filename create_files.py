@@ -25,10 +25,10 @@ def create_all_scenes_in_module(module: object) -> None:
 
 
 if __name__ == '__main__':
-    current_scene = XLookup_E02.SearchModesExplained
+    current_scene = XLookup_E03.WildCardSearch
 
-    # prototype(current_scene)
-    create_multiple_scenes([current_scene])
+    prototype(current_scene)
+    # create_multiple_scenes([current_scene])
     # create_multiple_scenes([XLookup_E02.SearchModesExample, XLookup_E02.NotFoundExample2])
     # create_all_scenes_in_module(XLookup_E02)
 

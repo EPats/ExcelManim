@@ -438,7 +438,6 @@ class XLookupReview(Scene):
         # self.play(Unwrite(formula), Uncreate(formula.highlight_objs))
 
 
-
 class SearchModesExample(NarratedScene):
     def construct(self):
         title = Text('XLookup: Search Mode').scale(0.85).to_edge(UP)
@@ -491,6 +490,7 @@ class SearchModesExample(NarratedScene):
         self.play(formula.write_to_scene())
         self.play(LaggedStart(*[Write(mob) for mob in hidden_data], lag_ratio=0.2))
         self.wait(10)
+
 
 class SearchModesBlank(NarratedScene):
     def construct(self):

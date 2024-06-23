@@ -1,4 +1,6 @@
 from manim import *
+
+import excel_formula
 from excel_formula import *
 from excel_tables import *
 from scenes import NarratedScene
@@ -68,6 +70,7 @@ class HelperLookups(NarratedScene):
         self.play(formula_2.write_to_scene())
         self.play(Write(hidden_data[0]))
         self.wait(2)
+
 
 class ExactExplainer(NarratedScene):
     def construct(self):
@@ -159,32 +162,113 @@ class NamedRangeTableExample(NarratedScene):
 
         table_data = [
             ['\\textbf{Month}', '\\textbf{Sales}'],
-            ['January', '1000'],
-            ['February', '2000'],
-            ['March', '3000'],
-            ['April', '4000'],
-            ['May', '5000'],
-            ['June', '6000'],
-            ['July', '7000'],
-            ['August', '8000'],
-            ['September', '9000'],
-            ['October', '10000'],
-            ['November', '11000'],
-            ['December', '12000']
+            ['January', '1,024'],
+            ['February', '2,502'],
+            ['March', '3,726'],
+            ['April', '4,583'],
+            ['May', '5,312'],
+            ['June', '6,104'],
+            ['July', '7,561'],
+            ['August', '8,926'],
+            ['September', '9,012'],
+            ['October', '10,052'],
+            ['November', '11,104'],
+            ['December', '12,068']
         ]
 
         extra_data = [table_data[0], table_data[6]]
         table_data = [table_data[i] + ([''] + extra_data[i] if i < len(extra_data) else [''] * 3)
                       for i in range(len(table_data))]
 
-        table = ExcelTable(table_data).scale(0.4).to_corner(DL)
-        table.add_named_table('A3:B8')
-        self.play(table.get_draw_animation())
-        self.wait(2)
-        formula_str = '=TEST(Table1[Sales], !MyNamedRange!)'
-        dynamic_ranges = {'Table1[Sales]': 'A2:A13',
-                          'MyNamedRange': 'B2:B13'}
-        formula = ExcelFormula(formula_str, tables_list=[table], target_cell='D3', start_align=LEFT + UP,
+        table = ExcelTable(table_data).scale(0.35).to_corner(DL)
+        table.add_named_table('A1:B13')
+
+        formula_str = '=XLOOKUP(!FocusMonth!, Table[Month], Table[Sales])'
+        dynamic_ranges = {'Table[Month]': 'A2:A13',
+                          'Table[Sales]': 'B2:B13',
+                          'FocusMonth': 'D2'}
+        formula = ExcelFormula(formula_str, tables_list=[table], target_cell='E2', start_align=LEFT + UP,
                                start_location=UP+RIGHT*1, dynamic_ranges=dynamic_ranges)
+        hidden_data = [(2, 5)]
+
+        self.play(table.get_draw_animation(hidden_data=hidden_data))
+        self.wait(2)
         self.play(formula.write_to_scene())
+        self.wait(0.5)
+        self.play(Write(table.get_rows()[hidden_data[0][0]][hidden_data[0][1]]))
         self.wait(4)
+
+
+class WildCardSearch(NarratedScene):
+    def construct(self):
+        title = Text('Wildcard Searches').scale(0.85).to_edge(UP)
+        title.z_index = 1
+        self.play(Write(title))
+        self.wait(1)
+
+        wildcards = [Tex(excel_formula.FORMULA_REPLACEMENTS[wc]
+                         if wc in excel_formula.FORMULA_REPLACEMENTS
+                         else wc) for wc in ['?', '*', '~']]
+        wildcard_examples = VGroup(*wildcards).scale(2.5).arrange(RIGHT, buff=2.5).shift(UP*1)
+        self.play(LaggedStart(*[Write(wct) for wct in wildcard_examples], lag_ratio=0.4))
+        self.wait(2)
+
+        wildcard_explainers = [Tex(explainer).scale(0.7) for explainer in
+                               ['Any one\n\rcharacter', 'Any number\n\rof characters', 'Escape\n\rcharacter']]
+        for i, wildcard_explainer in enumerate(wildcard_explainers):
+            wildcard_explainer.next_to(wildcards[i], DOWN)
+            if i > 0:
+                wildcard_explainer.align_to(wildcard_explainers[i-1], UP)
+            self.play(Write(wildcard_explainer))
+            self.wait(1)
+
+        self.wait(2)
+        self.play(Unwrite(wildcard_examples), *[Unwrite(wce).set_run_time(1) for wce in wildcard_explainers])
+        self.wait(2)
+
+        base_table_data = [
+            ['\\textbf{Name}', '\\textbf{Age}', '\\textbf{Profession}', '\\textbf{Excel}\n\r\\textbf{Skill}',
+             '\\textbf{Hometown}'],
+            ['Rose', '23', 'Shop Assistant', '2', 'London'],
+            ['Martha', '29', 'Doctor', '3', 'London'],
+            ['Donna', '35', 'Temp', '4', 'London'],
+            ['Amy', '27', 'Journalist', '2', 'Leadworth'],
+            ['Rory', '30', 'Nurse', '1', 'Leadworth'],
+            ['Clara', '28', 'Teacher', '5', 'Blackpool'],
+            ['Bill', '24', 'Student', '2', 'Bristol'],
+            ['Yasmin', '28', 'Police Officer', '3', 'Sheffield']
+        ]
+
+        extra_data = [
+                      ['\\textbf{Pattern}', '\\textbf{Name}', '\\textbf{Profession}'],
+                      ['M*', 'Martha', 'Doctor'],
+                      ['R?s?', 'Rose', 'Shop Assistant'],
+                      ['C*a', 'Clara', 'Teacher'],
+                      ['*s*', 'Rose', 'Shop Assistant'],
+                      ['*s???', 'Yasmin', 'Police Officer']
+                      ]
+
+        table_data = [base_table_data[i] + [''] + (extra_data[i] if i < len(extra_data) else [''] * len(extra_data[0]))
+                      for i in range(len(base_table_data))]
+        table = ExcelTable(table_data).scale(0.4).to_edge(DOWN)
+
+        formula_str = '=XLOOKUP(G2, $A$2:$A$9, $A$2:A$9 & $C$2:$C$9, , 2)'
+        formula = ExcelFormula(formula_str, tables_list=[table], target_cell='H2', start_align=UP,
+                               start_location=table.get_edge_center(UP) + UP * 0.75, split_lines=False)
+        j_vals = [8, 9]
+        hidden_data = [(i, j) for i in range(2, len(extra_data) + 1) for j in j_vals]
+        i_vals = {i for i, j in hidden_data}
+
+        hidden_data_rows = [[table.get_rows()[i][j_vals[0]], table.get_rows()[i][j_vals[1]]] for i in i_vals]
+
+        self.play(table.get_draw_animation(hidden_data=hidden_data))
+        self.wait(2)
+        self.play(formula.write_to_scene())
+        self.wait(2)
+
+        self.play(LaggedStart(*[Write(el) for el in hidden_data_rows[0]], lag_ratio=0.4))
+        self.wait(2)
+        self.play(table.animate_flash_fill(range_str='H2', lagged_animations=[LaggedStart(*[Write(el) for el in row])
+                                                                              for row in hidden_data_rows[1:]]))
+        self.wait(2)
+
