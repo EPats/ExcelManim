@@ -143,7 +143,7 @@ class ExcelFormula(VGroup):
             elif line_tokens[i][0][0] == 'parentheses_close':
                 tex_mob_line.align_to(parentheses_open[-1][0], LEFT)
             elif line_tokens[i][0][0] != 'main_function':
-                align_mob_index = parentheses_open[-1][1]
+                align_mob_index = parentheses_open[-1][1] if parentheses_open else (0, 1)
                 align_mob = tex_mob_lines[align_mob_index[0]][align_mob_index[1] + 1]
                 tex_mob_line.align_to(align_mob, LEFT)
 
@@ -206,16 +206,17 @@ class ExcelFormula(VGroup):
     def fade_out(self):
         return AnimationGroup(*[FadeOut(mob) for mob in self.get_all_objects()])
 
-    def write_to_scene(self, run_time: float = 1.5, gap_between: float = 0.3) -> Animation:
+    def formula_box_anim(self):
+        table = list(self.tables.values())[0] if len(self.tables) == 1 \
+            else self.tables[self.target_cell.split('!')[0]]
+        highlight_anim = table.get_passing_flash(range_str=self.target_cell, flash_color=BLACK, stroke_width=2.5)
+        return LaggedStart(highlight_anim, Transform(self.formula_box[0], self.formula_box[1]), lag_ratio=0.2)
+
+    def write_to_scene(self, run_time: float = 1.5, gap_between: float = 0) -> Animation:
         all_animations = []
 
         if self.target_cell:
-            table = list(self.tables.values())[0] if len(self.tables) == 1 \
-                else self.tables[self.target_cell.split('!')[0]]
-            highlight_anim = table.get_passing_flash(range_str=self.target_cell, flash_color=BLACK, stroke_width=2.5)
-            type_anims = LaggedStart(highlight_anim, Transform(self.formula_box[0], self.formula_box[1]),
-                                lag_ratio=0.2)
-            all_animations.append(type_anims)
+            all_animations.append(self.formula_box_anim())
 
         for i, tex_line in enumerate(self):
             tex: Tex
