@@ -1,91 +1,354 @@
+import math
+from enum import Enum
+from functools import partial
+
+from manim.mobject.mobject import _AnimationBuilder
+from typing_extensions import Self
+
 from manim import *
 from manim.typing import Vector3D
 import re
 import excel_constants
+from custom_animations import CreateWithMovement, FadeInWithMovementAndScale
+from excel_tables import ExcelTable
+import numpy as np
 
 
 class Eye(VGroup):
-    def __init__(self, **kwargs):
+    def __init__(self, is_left: bool = True, **kwargs):
+        self.is_left = is_left
         self.eye_background = Circle(radius=0.2, color=BLACK, fill_color=WHITE, fill_opacity=1)
         outer_pupil = Circle(radius=0.1, color=excel_constants.EP_GREEN, fill_color=BLACK, fill_opacity=1)
         pupil_highlight = (AnnularSector(outer_radius=0.08, inner_radius=0.04, angle=75 * DEGREES, fill_color=WHITE,
                                          fill_opacity=1, stroke_opacity=0)
                            .flip(Y_AXIS).move_to(outer_pupil.get_center()).shift(LEFT * 0.02 + UP * 0.02))
-        self.pupil = VGroup(outer_pupil, pupil_highlight)
-        super().__init__(self.eye_background, self.pupil, **kwargs)
+        self.eye_background.set_z_index(4 if is_left else 1)
+        self.pupil = VGroup(outer_pupil, pupil_highlight).set_z_index(5 if is_left else 2)
+        self.eye_cover = self.eye_background.copy().set_fill(opacity=0).set_z_index(6 if is_left else 3)
+        self.eyebrow_expressions: dict[str, VMobject] = {
+            'angry': self._create_angry_eyebrow().set_z_index(7),
+            'intrigued': self._create_intrigued_eyebrow().set_z_index(7),
+            'surprised': self._create_surprised_eyebrow().set_z_index(7)
+        }
+        super().__init__(self.eye_background, self.pupil, self.eye_cover,
+                         *self.eyebrow_expressions.values(), **kwargs)
+        self.shift((LEFT if is_left else RIGHT) * 0.18 + UP * 0.2)
 
-    def get_animation_for_look(self, direction: Vector3D):
-        return self.pupil.animate.shift(direction * 0.01)
+    def _create_angry_eyebrow(self):
+        start_pos = (
+                (self.eye_background.get_left() if self.is_left else self.eye_background.get_right())
+                + UP * self.eye_background.height * 1 / 2
+                + (RIGHT if self.is_left else LEFT) * self.eye_background.width * 1 / 10
+        )
+        end_pos = (
+                (self.eye_background.get_right() if self.is_left else self.eye_background.get_left())
+                + UP * self.eye_background.height * 3 / 10
+        )
+        return Line(start_pos, end_pos, color=GREY_BROWN, stroke_width=7)
+
+    def _create_intrigued_eyebrow(self):
+        arc = Arc(radius=0.2, color=GREY_BROWN, angle=120 * DEGREES, start_angle=30 * DEGREES,
+                  fill_opacity=0)
+        arc.stretch(0.4, dim=1)
+        arc.next_to(self.eye_background, UP, buff=0.05)
+        if not self.is_left:
+            arc.points = arc.points[::-1]
+        return arc
+
+    def _create_surprised_eyebrow(self):
+        arc = Arc(radius=0.2, color=GREY_BROWN, angle=120 * DEGREES, start_angle=30 * DEGREES)
+        arc.next_to(self.eye_background, UP, buff=0.15)
+        arc.rotate(10 * DEGREES * (1 if self.is_left else -1), about_point=self.eye_background.get_center())
+        if not self.is_left:
+            arc.points = arc.points[::-1]
+        return arc
+
+    def animate_create(self) -> Animation:
+        for eyebrow_type in self.eyebrow_expressions:
+            self.eyebrow_expressions[eyebrow_type].set_stroke(opacity=0)
+
+        return LaggedStart(
+            Create(self.eye_background, run_time=1.3),
+            FadeIn(self.pupil),
+            FadeIn(self.eye_cover, run_time=0.1),
+            lag_ratio=0.2
+        )
+
+    def animate_close(self, **kwargs) -> Animation:
+        return self.eye_cover.animate(**kwargs).set_fill(opacity=1)
+
+    def animate_open(self, **kwargs) -> Animation:
+        return self.eye_cover.animate(**kwargs).set_fill(opacity=0)
+
+    def animate_blink(self, **kwargs) -> Animation:
+        return self.animate_close(rate_func=there_and_back_with_pause, **kwargs)
+
+    def animate_look(self, direction: Vector3D, **kwargs):
+        return self.pupil.animate(**kwargs).shift(direction * 0.01)
+
+    def animate_triangle_eye(self, additional_scale: float = 1, **kwargs) -> Animation:
+        triangle_shape = Polygon(ORIGIN + LEFT * 1, ORIGIN + RIGHT * 1 + DOWN * 0.1,
+                                 ORIGIN + UP * 2.25 + LEFT * 0.4,
+                                 color=BLACK, fill_color=WHITE, fill_opacity=1).scale(0.25 * additional_scale)
+        triangle_shape.move_to(self.eye_background.get_center() +
+                               UP * additional_scale * 0.1 + RIGHT * additional_scale * 0.05)
+        # if not self.is_left:
+        #     triangle_shape.rotate(10 * DEGREES).shift(LEFT * 0.025 + UP * 0.025)
+        triangle_cover = triangle_shape.copy().set_fill(opacity=0)
+        return AnimationGroup(
+            Transform(self.eye_background, triangle_shape, **kwargs),
+            Transform(self.eye_cover, triangle_cover, **kwargs)
+        )
+
+    def animate_square_eye(self, additional_scale: float = 1, **kwargs) -> Animation:
+        square_shape = Polygon(ORIGIN + LEFT * 0.9 + DOWN * 0.3, ORIGIN + RIGHT * 0.8 + DOWN * 0.5,
+                               ORIGIN + UP * 1.5 + RIGHT * 1.1, ORIGIN + UP * 1.2 + LEFT * 1,
+                               color=BLACK, fill_color=WHITE, fill_opacity=1).scale(0.21 * additional_scale)
+        square_shape.move_to(self.eye_background)
+        square_cover = square_shape.copy().set_fill(opacity=0)
+        return AnimationGroup(
+            Transform(self.eye_background, square_shape, **kwargs),
+            Transform(self.eye_cover, square_cover, **kwargs)
+        )
+
+    def animate_angry_eye(self, **kwargs) -> Animation:
+        eyebrow: VMobject = self.eyebrow_expressions['angry']
+        eyebrow.set_stroke(opacity=1)
+        return Create(eyebrow, **kwargs)
+
+    def animate_intrigued_eye(self, **kwargs) -> Animation:
+        eyebrow: VMobject = self.eyebrow_expressions['intrigued']
+        eyebrow.set_stroke(opacity=1)
+        return CreateWithMovement(eyebrow, eyebrow.height * 2 * DOWN, **kwargs)
+
+    def animate_move_eyebrow(self, relative_movement: Vector3D, eyebrow: str = 'intrigued', **kwargs) -> (
+            _AnimationBuilder | Self):
+        eyebrow: VMobject = self.eyebrow_expressions.get(eyebrow, self.eyebrow_expressions['intrigued'])
+        eyebrow.set_stroke(opacity=1)
+        movement: Vector3D = relative_movement * eyebrow.height
+        return eyebrow.animate(**kwargs).shift(movement)
+
+    def animate_surprised_eye(self, rate_func=linear, **kwargs) -> Animation:
+        eyebrow: VMobject = self.eyebrow_expressions['surprised']
+        eyebrow.set_stroke(opacity=1)
+        # eyebrow.set_opacity(1)
+        return LaggedStart(
+            FadeInWithMovementAndScale(
+                eyebrow.height * 2 * DOWN, 0.2,
+                eyebrow, rate_func=rate_func, **kwargs
+            ),
+            self.animate_eye_flex(run_time=1.3),
+            lag_ratio=0.2
+        )
+
+    def animate_eye_flex(self, run_time: float = 0.6, scale: float = 1.1):
+        return AnimationGroup(
+            self.eye_background.animate(run_time=run_time, rate_func=there_and_back).scale(scale),
+            self.eye_cover.animate(run_time=run_time, rate_func=there_and_back).scale(scale)
+        )
+
+    def get_shown_eyebrows(self) -> list[str]:
+        eyebrows_shown: list[str] = []
+        for key in self.eyebrow_expressions:
+            if self.eyebrow_expressions.get(key).stroke_opacity > 0:
+                eyebrows_shown.append(key)
+        return eyebrows_shown
+
+    def animate_hide_eyebrow(self, eyebrow_type: str, **kwargs) -> Animation:
+        eyebrow = self.eyebrow_expressions.get(eyebrow_type, self.eyebrow_expressions['intrigued'])
+        return FadeOut(eyebrow, **kwargs)
 
 
 class XCharacter(VGroup):
     def __init__(self, **kwargs):
-        self.straight_arm = SVGMobject(
-            file_name='svg/x_char_straight_arm.svg',
+        self.straight_arm = self._create_arm('straight_arm')
+        self.curved_arm = self._create_arm('curved_arm').scale(1.25).align_to(self.straight_arm, DOWN)
+        self.wave_arm = self._create_arm('curved_arm_wave').scale(1.25).align_to(self.straight_arm, DOWN)
+        self.left_eye = Eye()
+        self.right_eye = Eye(is_left=False)
+        self.eyes = [self.left_eye, self.right_eye]
+
+        super().__init__(self.straight_arm, self.curved_arm, self.left_eye, self.right_eye, **kwargs)
+        self.scale_factor = 1
+
+    def _create_arm(self, arm_name: str) -> SVGMobject:
+        return SVGMobject(
+            file_name=f'svg/x_char_{arm_name}.svg',
             fill_color=excel_constants.EP_GREEN, fill_opacity=1,
-            stroke_color=excel_constants.EP_EXCEL_GREEN
+            stroke_color=excel_constants.EP_EXCEL_GREEN, stroke_width=2
         )
-        self.curved_arm = (SVGMobject(
-            file_name='svg/x_char_curved_arm.svg',
-            fill_color=excel_constants.EP_GREEN, fill_opacity=1,
-            stroke_color=excel_constants.EP_EXCEL_GREEN
-        ).scale(1.25).align_to(self.straight_arm, DOWN))
 
-        self.wave_arm = (SVGMobject(
-            file_name='svg/x_char_curved_arm_wave.svg',
-            fill_color=excel_constants.EP_GREEN, fill_opacity=1,
-            stroke_color=excel_constants.EP_EXCEL_GREEN
-        ).scale(1.25).align_to(self.straight_arm, DOWN))
+    def scale(self, scale_factor: float, **kwargs) -> Self:
+        self.scale_factor = scale_factor
+        return super().scale(scale_factor, **kwargs)
 
-        self.left_eye = Eye().shift(LEFT * 0.18 + UP * 0.2)
-        self.right_eye = Eye().shift(RIGHT * 0.18 + UP * 0.2).set_z_index(2)
-        self.left_eye_cover = self.left_eye.eye_background.copy().set_fill(opacity=0).set_z_index(1)
-        self.right_eye_cover = self.right_eye.eye_background.copy().set_fill(opacity=0).set_z_index(3)
+    def animate_blink(self, blink_time: float = 0.4):
+        return AnimationGroup(
+            self.left_eye.animate_blink(run_time=blink_time),
+            self.right_eye.animate_blink(run_time=blink_time)
+        )
 
-        super().__init__(self.straight_arm, self.curved_arm, self.left_eye, self.right_eye,
-                         self.left_eye_cover, self.right_eye_cover, **kwargs)
-        # self.left_eye.z_index = 2
-        # self.right_eye_cover.z_index = 1
+    def animate_triangle_eyes(self, **kwargs):
+        return AnimationGroup(
+            *[eye.animate_triangle_eye(additional_scale=self.scale_factor, **kwargs) for eye in self.eyes]
+        )
 
-    def get_animation_for_look(self, direction: Vector3D, run_time: float = 1):
-        return AnimationGroup(self.left_eye.get_animation_for_look(direction),
-                              self.right_eye.get_animation_for_look(direction), run_time=run_time)
+    def animate_square_eyes(self, **kwargs):
+        return AnimationGroup(
+            *[eye.animate_square_eye(additional_scale=self.scale_factor, **kwargs) for eye in self.eyes]
+        )
 
-    def get_animation_draw_then_fill(self):
+    def animate_angry_eyes(self, **kwargs):
+        return AnimationGroup(
+            *[eye.animate_angry_eye(**kwargs) for eye in self.eyes]
+        )
+
+    def animate_intrigued_eyes(self, **kwargs):
+        return AnimationGroup(
+            *[eye.animate_intrigued_eye(**kwargs) for eye in self.eyes]
+        )
+
+    def animate_think_eye(self, **kwargs):
+        return self.left_eye.animate_move_eyebrow(relative_movement=UP * 2,
+                                                  rate_func=there_and_back_with_pause,
+                                                  run_time=1.5, **kwargs)
+
+    def animate_hide_eyebrow(self, eyebrow_type: str, **kwargs) -> Animation:
+        return AnimationGroup(
+            *[eye.animate_hide_eyebrow(eyebrow_type, **kwargs) for eye in self.eyes]
+        )
+
+    def true_hide_eyebrow(self, eyebrow_type: str):
+        for eye in self.eyes:
+            eyebrow = eye.eyebrow_expressions.get(eyebrow_type)
+            if eyebrow:
+                eyebrow.set_stroke(opacity=0)
+
+    def animate_surprised_eyes(self, **kwargs):
+        return AnimationGroup(
+            *[eye.animate_surprised_eye(**kwargs) for eye in self.eyes]
+        )
+
+    def animate_look(self, direction: Vector3D, **kwargs):
+        return AnimationGroup(*[eye.animate_look(direction, **kwargs) for eye in self.eyes])
+
+    def animate_create(self):
         straight_arm_animation = DrawBorderThenFill(self.straight_arm, run_time=2)
         curved_arm_animation = DrawBorderThenFill(self.curved_arm, run_time=2)
         arm_animations = LaggedStart(straight_arm_animation, curved_arm_animation, lag_ratio=0.2)
 
-        left_eye_background_animations = Create(self.left_eye.eye_background, run_time=1.3)
-        right_eye_background_animations = Create(self.right_eye.eye_background, run_time=1.3)
-        eye_background_animations = LaggedStart(left_eye_background_animations,
-                                                right_eye_background_animations, lag_ratio=0.2)
+        eye_animations = LaggedStart(
+            *[eye.animate_create() for eye in self.eyes[::-1]],
+            lag_ratio=0.2
+        )
 
-        left_pupil_animation = FadeIn(self.left_eye.pupil, run_time=1)
-        right_pupil_animation = FadeIn(self.right_eye.pupil, run_time=1)
-        pupil_animations = LaggedStart(left_pupil_animation, right_pupil_animation, lag_ratio=0.2)
+        return Succession(LaggedStart(arm_animations, eye_animations, lag_ratio=0.3))
 
-        eye_cover_animations = FadeIn(self.left_eye_cover, self.right_eye_cover, run_time=0.1)
-
-        return Succession(LaggedStart(arm_animations, eye_background_animations,
-                                      pupil_animations, lag_ratio=0.3), eye_cover_animations)
-
-    def get_wave_by_transform_animation(self):
+    def animate_wave_transform(self):
         tmp_points = self.wave_arm[0].points
         new_arm = self.curved_arm[0].copy()
         for i in [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]:
             new_arm.points[i] = tmp_points[i]
         return Transform(self.curved_arm[0], new_arm, rate_func=there_and_back, run_time=2)
 
-    def get_wave_by_shift_animation(self):
+    def animate_lean_eyes(self,
+                          angle: float = PI / 8,
+                          axis: Vector3D = OUT,
+                          rate_func=there_and_back_with_pause,
+                          **kwargs):
+        return AnimationGroup(
+            *[eye.animate(rate_func=rate_func, **kwargs).rotate(angle=angle, axis=axis, about_point=self.get_center())
+              for eye in self.eyes]
+        )
+
+    def animate_twist_and_shout(self,
+                                angle: float = PI / 5,
+                                rate_func=there_and_back_with_pause,
+                                **kwargs) -> Animation:
+        center = self.get_center()
+        top_y = self.get_top()[1]
+        longest_distance = top_y - center[1]
+        self.save_state()
+
+        def apply_rotation_to_points(points):
+            rotated_points = points.copy()
+            for i in range(len(points)):
+                y_distance = points[i][1] - center[1]
+                if y_distance > 0:
+                    rotation_factor = y_distance / longest_distance
+                    point_angle = angle * rotation_factor
+                    rot_matrix = rotation_matrix(point_angle, UP)
+                    rotated_points[i] = np.dot(rot_matrix, points[i])
+            return rotated_points
+
+        # rot_matrix = rotation_matrix(angle, UP)
+        return self.animate(rate_func=rate_func, **kwargs).apply_points_function_about_point(
+            apply_rotation_to_points, center, **kwargs
+        )
+
+
+        # def offset_rotation
+        # # def rotation_calculation(theta: float) -> Vector3D:
+        # #     rot_matrix = rotation_matrix(theta, UP)
+        #
+        # rotation_centre = self.get_center()
+        # farthest_point = self.get_top()
+        # longest_distance = farthest_point[1] - rotation_centre[1]
+        #
+        # # self.apply_points_function_about_point(
+        # #     lambda points: np.dot(points, rotation_matrix(angle * alpha, UP).T), about_point, **kwargs
+        # # )
+        # return UpdateFromAlphaFunc(
+        #     self,
+        #     lambda mob, alpha: mob.become(
+        #         self.copy().apply_points_function_about_point(
+        #             lambda p: np.dot(p, rotation_matrix(angle * alpha, UP).T),
+        #             about_point=rotation_centre
+        #         )
+        #     ),
+        #     **kwargs
+        # )
+
+        # return self.animate(rate_func=rate_func, **kwargs).rotate(angle=angle, axis=axis, about_point=self.get_center())
+
+        # animations: list[Animation] = []
+        # start_pos: Vector3D = (config.frame_width / 2 + max(
+        #     [pokemon.width for pokemon in pokemon_group])) * RIGHT + DOWN * 1.5
+        # for pokemon in pokemon_group:
+        #     pokemon_start_width: float = pokemon.width
+        #     pokemon.prev_rotation = 0
+        #
+        #     pokemon_updater = partial(pokemon_carousel,
+        #                               start_width=pokemon_start_width,
+        #                               start_loc=start_pos
+        #                               )
+        #
+        #     animations.append(UpdateFromAlphaFunc(
+        #         pokemon,
+        #         pokemon_updater,
+        #         run_time=10,
+        #         rate_func=rate_functions.ease_out_sine)
+        #     )
+        # return UpdateFromAlphaFunc(
+        #     self,
+        #     lambda mob, alpha: mob.become(
+        #         self.copy().apply_function(
+        #             lambda p: p + wave_function(alpha)
+        #             if (p[0] > tmp_arm.get_center()[0]
+        #                 and p[1] > tmp_arm.get_center()[1])
+        #             else p
+        #         )
+        #     )
+        # ).set_run_time(2)
+
+    def animate_wave_shift(self):
         def wave_function(t: float):
             t_adjustment: float = 0.5
             adj_t: float = t - t_adjustment
 
-            # Ellipse parameters
-            b: float = 0.18  # semi-major axis (height)
-            c: float = 0.15  # semi-minor axis (width)
-            angle: float = -30 * np.pi / 180  # tilt angle in radians
+            b: float = 0.18
+            c: float = 0.15
+            angle: float = -30 * np.pi / 180
 
             def x_calc(a: float):
                 return b * np.sin(2 * np.pi * a)
@@ -97,14 +360,13 @@ class XCharacter(VGroup):
             x = x_calc(adj_t) - x_calc(-t_adjustment)
             y = y_calc(adj_t) - y_calc(-t_adjustment)
 
-            # Rotate the point
             x_rotated = x * np.cos(angle) - y * np.sin(angle)
             y_rotated = x * np.sin(angle) + y * np.cos(angle)
 
             return np.array([x_rotated, y_rotated, 0])
 
         tmp_arm = self.curved_arm[0].copy()
-        # Animate the waving motion
+
         return UpdateFromAlphaFunc(
             self.curved_arm[0],
             lambda mob, alpha: mob.become(
@@ -113,11 +375,11 @@ class XCharacter(VGroup):
                     if (p[0] > tmp_arm.get_center()[0]
                         and p[1] > tmp_arm.get_center()[1])
                     else p
-                    )
                 )
+            )
         ).set_run_time(2)
 
-    def get_half_circle_wave_animation(self):
+    def animate_wave_half_circle(self):
         def wave_function(t: float):
             t_adjustment: float = 0.5
 
@@ -162,7 +424,7 @@ class XCharacter(VGroup):
             )
         ).set_run_time(2)
 
-    def get_jump_animation(self):
+    def animate_jump(self):
         jump_height = 0.5
         jump_time = 1.5
         squat_scale_y = 0.9  # Vertical scale for squatting
@@ -196,8 +458,7 @@ class XCharacter(VGroup):
                     scale_x = squat_scale_x + (1 - squat_scale_x) * ((t_adjusted - 0.5) * 2)
                 return y, scale_x, scale_y
 
-        char_mobs = [self, self.straight_arm, self.curved_arm, self.left_eye, self.right_eye, self.left_eye_cover,
-                     self.right_eye_cover]
+        char_mobs = [self, self.straight_arm, self.curved_arm, self.left_eye, self.right_eye]
 
         def create_update_func(mob):
             initial_center = mob.get_center()
@@ -225,10 +486,10 @@ class XCharacter(VGroup):
 
         return AnimationGroup(*animations)
 
-    def get_spin_animation(self, clockwise: bool = True):
+    def animate_spin(self, clockwise: bool = True):
         return Rotate(self, angle=PI * (-2 if clockwise else 2), about_point=self.get_center(), run_time=2)
 
-    def get_bouncing_wave_animation(self):
+    def animate_wave_bouncing(self):
         def wave_function(t: float):
             x = 0.2 * np.sin(2 * np.pi * t)
             y = 0.1 * np.abs(np.sin(4 * np.pi * t))
@@ -246,40 +507,24 @@ class XCharacter(VGroup):
             )
         ).set_run_time(2)
 
-    def get_blink_animation(self, blink_time: float = 0.4):
-        return Succession(
-            self.get_close_eyes_animation(blink_time / 2),
-            self.get_open_eyes_animation(blink_time / 2)
-        )
-
-    def get_close_eyes_animation(self, close_time: float = 0.2):
-        return AnimationGroup(
-            Transform(self.left_eye_cover, self.left_eye.eye_background.copy().set_fill(opacity=1)),
-            Transform(self.right_eye_cover, self.right_eye.eye_background.copy().set_fill(opacity=1)),
-            run_time=close_time
-        )
-
-    def get_open_eyes_animation(self, open_time: float = 0.2):
-        return AnimationGroup(
-            Transform(self.left_eye_cover, self.left_eye.eye_background.copy().set_fill(opacity=0)),
-            Transform(self.right_eye_cover, self.right_eye.eye_background.copy().set_fill(opacity=0)),
-            run_time=open_time
-        )
-
     def rotate_arms(self, clockwise_curved: bool = True, clockwise_straight: bool = False, angle_rad: float = PI * 0.1):
         return AnimationGroup(
-            Rotate(self.curved_arm, angle=angle_rad * (-1 if clockwise_curved else 1), about_point=self.get_center(), run_time=2),
-            Rotate(self.straight_arm, angle=angle_rad * (-1 if clockwise_straight else 1), about_point=self.get_center(), run_time=2)
+            Rotate(self.curved_arm, angle=angle_rad * (-1 if clockwise_curved else 1), about_point=self.get_center(),
+                   run_time=2),
+            Rotate(self.straight_arm, angle=angle_rad * (-1 if clockwise_straight else 1),
+                   about_point=self.get_center(), run_time=2)
         )
 
-    def rotate_arms_there_and_back(self, clockwise_curved: bool = True, clockwise_straight: bool = False, angle_rad: float = PI * 0.1):
+    def rotate_arms_there_and_back(self, clockwise_curved: bool = True, clockwise_straight: bool = False,
+                                   angle_rad: float = PI * 0.1):
         return (self.rotate_arms(clockwise_curved, clockwise_straight, angle_rad)
                 .set_rate_func(there_and_back))
 
-    def get_arm_flex_animation(self, use_straight_arm: bool = True):
+    def get_arm_flex_animation(self, use_straight_arm: bool = True, bend_multiplier: float = 0.15):
         arm = self.straight_arm if use_straight_arm else self.curved_arm
+
         def flex_function(t: float):
-            bend_amount = 0.1 * np.sin(np.pi * t)
+            bend_amount = bend_multiplier * np.sin(np.pi * t)
 
             def apply_flex(p):
                 x, y, z = p
@@ -298,6 +543,81 @@ class XCharacter(VGroup):
                 tmp_arm.copy().apply_function(flex_function(alpha))
             )
         ).set_run_time(1.5)
+
+    def get_flatten_wave_animation(self):
+        def waving_rate_func(t: float, inflection: float = 10.0) -> float:
+            new_t = np.interp(t, [0, 0.25, 0.5, 0.75, 1], [0, 0.5, 0.1, 0.5, 1])
+            return smooth(new_t, inflection)
+
+        return self.get_arm_flatten_animation().set_run_time(2.5).set_rate_func(waving_rate_func)
+
+    def get_arm_flatten_animation(self, flatten_multiplier: float = 0.5):
+        arm = self.curved_arm
+
+        def flex_function(t: float):
+            bend_amount = flatten_multiplier * np.sin(np.pi * t) * 0.8
+
+            def apply_flex(p):
+                x, y, z = p
+                x_min, x_max = arm[0].get_left()[0], arm[0].get_right()[0]
+                x_range = x_max - x_min
+                x_progress = (x - x_min) / x_range
+                x_progress = x_progress ** 10
+
+                return np.array([x, y + bend_amount * x_progress, z])
+
+            return apply_flex
+
+        tmp_arm = arm[0].copy()
+
+        return UpdateFromAlphaFunc(
+            arm[0],
+            lambda mob, alpha: mob.become(
+                tmp_arm.copy().apply_function(flex_function(alpha))
+            )
+        ).set_run_time(1.5)
+
+    def get_puff_animation(self):
+
+        def get_alpha_adj(alpha: float) -> float:
+            return (-math.cos(alpha * PI * 2) + 1) * 0.05
+
+        def get_new_positition(start_pos: Vector3D, v_mov: float, multiplier: float = 1.0) -> Vector3D:
+            return start_pos + v_mov * UP * multiplier
+
+        def move_eye(eye: Eye, alpha: float, start_pos: Vector3D):
+            alpha_adj = get_alpha_adj(alpha)
+            eye.eye_background.move_to(get_new_positition(start_pos, alpha_adj))
+            eye.pupil.move_to(get_new_positition(start_pos, alpha_adj, 1.5))
+
+        def move_eye_cover(cover: Mobject, alpha: float, start_pos: Vector3D):
+            alpha_adj = get_alpha_adj(alpha)
+            cover.move_to(get_new_positition(start_pos, alpha_adj))
+
+        return AnimationGroup(
+            self.get_arm_flex_animation(),
+            self.get_arm_flatten_animation(),
+            UpdateFromAlphaFunc(
+                self.left_eye,
+                partial(move_eye, start_pos=self.left_eye.get_center()),
+                run_time=1.5
+            ),
+            UpdateFromAlphaFunc(
+                self.right_eye,
+                partial(move_eye, start_pos=self.right_eye.get_center()),
+                run_time=1.5
+            ),
+            UpdateFromAlphaFunc(
+                self.left_eye_cover,
+                partial(move_eye_cover, start_pos=self.left_eye_cover.get_center()),
+                run_time=1.5
+            ),
+            UpdateFromAlphaFunc(
+                self.right_eye_cover,
+                partial(move_eye_cover, start_pos=self.right_eye_cover.get_center()),
+                run_time=1.5
+            )
+        )
 
     def get_arm_rotation_animation(self, angle=PI / 16):
         # Get all points of the straight arm
@@ -318,7 +638,7 @@ class XCharacter(VGroup):
 
         tmp_arm = self.straight_arm[0].copy()
         return Rotate(self.straight_arm, angle=angle, about_point=rotation_point,
-               run_time=2, rate_func=there_and_back)
+                      run_time=2, rate_func=there_and_back)
         # return UpdateFromAlphaFunc(
         #     self.straight_arm[0],
         #     lambda mob, alpha: mob.become(
@@ -446,301 +766,51 @@ class XCharacter(VGroup):
         return AnimationGroup(*animations)
 
 
-class CharacterAnimation(Scene):
+class WaveGoodbye(Scene):
     def construct(self):
-        character = XCharacter()
-        self.add(character)
-
-        original_arm = character.curved_arm[0]
-        new_arm = original_arm.copy()
-
-        tmp_points = character.wave_arm[0].points
-        for i in [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]:
-            new_arm.points[i] = tmp_points[i]
-        # self.play(Transform(original_arm, new_arm), rate_func=there_and_back, run_time=2)
-
-        anims_fn = [
-            character.rotate_arms_there_and_back,
-            character.get_arm_flex_animation,
-            character.get_arm_rotation_animation,
-            character.get_arm_extend_animation,
-            character.get_arm_wave_animation,
-            character.get_body_shake_animation,
-
-            character.get_wave_by_transform_animation,
-            character.get_wave_by_shift_animation,
-            character.get_half_circle_wave_animation,
-            character.get_bouncing_wave_animation,
-            character.get_jump_animation,
-            character.get_spin_animation,
-            character.get_blink_animation
-        ]
-
-        animation_name = Text(anims_fn[0].__name__)
-        animation_name.to_edge(UP)
-        self.add(animation_name)
-        for anim_fn in anims_fn:
-            new_name = Text(anim_fn.__name__)
-            new_name.to_edge(UP)
-            self.play(Transform(animation_name, new_name))
-            self.play(anim_fn())
-            self.wait(2)
-
-        self.wait(2)
+        char = XCharacter().scale(1.3)
+        self.wait()
+        self.play(char.animate_create())
+        self.wait(0.5)
+        self.play(char.animate_jump())
+        self.play(char.get_flatten_wave_animation())
+        self.wait()
 
 
-class TestScene(Scene):
+class Test(Scene):
     def construct(self):
-        x = XCharacter()
-        self.play(x.get_animation_draw_then_fill())
-        self.wait(3)
-        self.play(x.get_animation_for_look(RIGHT * 9 + UP * 4))
-        self.wait(3)
+        char = XCharacter()
+        char.scale(1.5)
+        char.to_corner(DL)
 
-        curves = [
-            {
-                'type': 'relative',
-                'control_points': [
-                    np.array([-0.435581, -0.59554, 1]),
-                    np.array([-0.238699, -3.55239, 1]),
-                    np.array([0.487741, -2.9019, 1])
-                ]
-            },
-            {
-                'type': 'absolute',
-                'control_points': [
-                    np.array([14.155645, 38.744005, 1]),
-                    np.array([27.39746, 7.2208952, 1]),
-                    np.array([32.6175, 4.2771552, 1])
-                ]
-            },
-            {
-                'type': 'relative',
-                'control_points': [
-                    np.array([2.0789, -1.17235, 1]),
-                    np.array([4.81788, -0.80107, 1]),
-                    np.array([4.8127, -0.77611, 1])
-                ]
-            },
-            {
-                'type': 'absolute',
-                'control_points': [
-                    np.array([32.11547, -3.1751248, 1]),
-                    np.array([15.466713, 40.605565, 1]),
-                    np.array([6.3567567, 35.099565, 1])
-                ]
-            }
-        ]
+        self.play(char.animate_create())
 
-        self.remove(x)
-        for curve in curves:
-            bez = bezier(curve['control_points'])
-            CubicBezier
-
-            pc = ParametricFunction(bez, t_range=np.array([0, 1, 0.001]))
-            self.play(Create(pc))
-            self.wait(3)
-            # self.remove(pc)
-
-
-class SVGBezierPath(Scene):
-    def construct(self):
-        # Scaling factor and translation to fit within [-7, 7] x [-4, 4]
-        scale_factor = -0.1  # Adjust the scale factor as needed
-        x_offset = -3  # Offset to place the start point near the origin
-        y_offset = 2.5  # Offset to place the start point near the origin
-
-        def point3D(point):
-            return np.array([point[0], point[1], 0])
-
-        p0 = ORIGIN
-        p1 = point3D([-0.435581, -0.59554])
-        p2 = point3D([-0.238699, -3.55239])
-        p3 = point3D([0.487741, -2.9019])
-
-        p4 = point3D([14.155645 - 6, 38.744005 - 35])
-        p5 = point3D([27.39746 - 6, 7.22089525])
-        p6 = point3D([32.6175 - 6, 4.2771552])
-
-        # p7 = point3D([32.6175 - 6 + 2.0789, 4.2771552 - 1.17235 + 35])
-        # p8 = point3D([32.6175 - 6 + 4.81788, 4.2771552 - 0.80107 + 35])
-        # p9 = point3D([32.6175 - 6 + 4.8127, 4.2771552 - 0.77611 + 35])
+        # self.play(char.animate_intrigued_eyes())
+        # self.wait()
+        # self.play(char.animate_think_eye())
+        # self.wait()
+        # self.play(char.animate_hide_eyebrow('intrigued'))
+        # char.true_hide_eyebrow('intrigued')
+        # self.wait()
+        # self.play(char.animate_angry_eyes())
+        # self.wait()
+        # self.play(char.animate_hide_eyebrow('angry'))
+        # char.true_hide_eyebrow('angry')
+        # self.wait()
+        # self.play(char.animate_surprised_eyes())
+        # self.wait()
+        # self.play(char.animate_hide_eyebrow('surprised'))
+        # char.true_hide_eyebrow('surprised')
+        # self.wait()
         #
-        # p10 = point3D([32.6175 - 6 + 4.8127 - 0.71674, 4.2771552 - 0.77611 + 3.45397 + 35])
-        # p11 = point3D([32.6175 - 6 + 4.8127 - 0.71674 - 0.91805, 4.2771552 - 0.77611 + 3.45397 + 0.005 + 35])
+        # self.play(char.animate_square_eyes())
+        # self.play(char.animate_blink())
+        # self.play(char.animate_look(UP * 3))
+        # self.play(char.animate_look(DOWN * 6 + RIGHT * 7))
+        # self.play(char.animate_lean_eyes())
+        # self.wait(2)
 
-        # Create the beziers
-        bezier1 = CubicBezier(p0, p1, p2, p3)
-        bezier2 = CubicBezier(p3, p4, p5, p6)
-        # bezier3 = CubicBezier(p6, p7, p8, p9)
-        # line1 = Line(p9, p10)
-        # line2 = Line(p10, p11)
-        # closing_line = Line(p11, p0)
-
-        # Create the path
-        path = VGroup(bezier1, bezier2)  #, bezier3, line1, line2, closing_line)
-        self.add(path)
-        self.play(Create(path), run_time=4)
-
-
-class test(Scene):
-    def construct(self):
-        m = [[0, 0],
-             [-0.435581, -0.59554],
-             [-0.238699, -3.55239],
-             [0.487741, -2.9019]]
-        l = [np.array([p] + [0]) for p in m]
-        bez = bezier(l)
-        pc = ParametricFunction(bez, t_range=np.array([0, 1, 0.001]))
-        self.play(Create(pc))
-        self.wait(3)
-        self.remove(pc)
-
-
-def draw_curves(start, lines, colors):
-    group = VGroup()
-    for i, line in enumerate(lines):
-        start_point = start if i == 0 else lines[i - 1]['end_point']
-        points_simple = [start_point] + (line['control_points'] + [line['end_point']] \
-                                             if line['type'] == 'cubic_bezier' else [line['end_point']])
-        points = [np.array([point[0], point[1] * -1, 0]) for point in points_simple]
-
-        line['points'] = points
-        line_mob = CubicBezier(*points) if line['type'] == 'cubic_bezier' else Line(*points)
-        line_mob.set_color(colors[i % len(colors)])
-        group.add(line_mob)
-
-    return group
-
-
-class bez2(Scene):
-    def construct(self):
-        start = (6, 35)
-        lines = [
-            # Cubic Bezier curve to (6.487741, 32.0981)
-            {
-                'type': 'cubic_bezier',
-                'control_points': [(5.564419, 34.40446), (5.761301, 31.44761)],
-                'end_point': (6.487741, 32.0981)
-            },
-            # Cubic Bezier curve to (32.6175, 4.2771552)
-            {
-                'type': 'cubic_bezier',
-                'control_points': [(14.155645, 38.744005), (27.39746, 7.2208952)],
-                'end_point': (32.6175, 4.2771552)
-            },
-            # Cubic Bezier curve to (37.4302, 3.5010452)
-            {
-                'type': 'cubic_bezier',
-                'control_points': [(34.6964, 3.1048052), (37.43538, 3.4760852)],
-                'end_point': (37.4302, 3.5010452)
-            },
-            # Line to (36.71346, 6.9550152)
-            {
-                'type': 'line',
-                'end_point': (36.71346, 6.9550152)
-            },
-            # Line to (35.79541, 6.9600152)
-            {
-                'type': 'line',
-                'end_point': (35.79541, 6.9600152)
-            },
-            # Cubic Bezier curve to (6.3567567, 35.099565)
-            {
-                'type': 'cubic_bezier',
-                'control_points': [(32.11547, -3.1751248), (15.466713, 40.605565)],
-                'end_point': (6.3567567, 35.099565)
-            },
-            # Close path to (6, 35)
-            {
-                'type': 'close_path',
-                'end_point': (6, 35)
-            }
-        ]
-
-        group = VGroup()
-        colors = [RED, GREEN, BLUE]
-
-        curve_arm = draw_curves(start, lines, colors)
-        curve_arm.scale(0.1).move_to(ORIGIN)
-        for line in curve_arm:
-            self.play(Create(line), run_time=5)
-            self.wait(3)
-        self.wait(3)
-
-        start = (6, 12)
-        lines = [
-            # Cubic Bezier curve to (6, 12) (since control points are relative and result in no movement)
-            {
-                'type': 'cubic_bezier',
-                'control_points': [(6, 12), (6, 12)],
-                'end_point': (6, 12)
-            },
-            # Line to (6, 12) with relative horizontal move to
-            {
-                'type': 'line',
-                'end_point': (6, 12)
-            },
-            # Line to (35.66023, 12)
-            {
-                'type': 'line',
-                'end_point': (35.66023, 12)
-            },
-            # Cubic Bezier curve to (112.241014, 124.78013)
-            {
-                'type': 'cubic_bezier',
-                'control_points': [(35.918061, 26.156343), (67.621281, 117.59919)],
-                'end_point': (112.241014, 124.78013)
-            },
-            # Line to (112.241014, 124.78013)
-            {
-                'type': 'line',
-                'end_point': (112.241014, 124.78013)
-            },
-            # Line to (108.358324, 135.34509)
-            {
-                'type': 'line',
-                'end_point': (108.358324, 135.34509)
-            },
-            # Line to (71.732517, 135.29809)
-            {
-                'type': 'line',
-                'end_point': (71.732517, 135.29809)
-            },
-            # Cubic Bezier curve to (71.742717, 128.01547)
-            {
-                'type': 'cubic_bezier',
-                'control_points': [(71.737517, 128.04297), (71.742717, 128.01547)],
-                'end_point': (71.742717, 128.01547)
-            },
-            # Line to (71.742717, 128.01547)
-            {
-                'type': 'line',
-                'end_point': (71.742717, 128.01547)
-            },
-            # Cubic Bezier curve to (71.742717, 122.54903)
-            {
-                'type': 'cubic_bezier',
-                'control_points': [(71.742717, 123.24882), (72.695417, 122.6639)],
-                'end_point': (71.742717, 122.54903)
-            },
-            # Cubic Bezier curve to (15.051116, 12.96748)
-            {
-                'type': 'cubic_bezier',
-                'control_points': [(45.900769, 20.408447), (20.438669, 12.725405)],
-                'end_point': (6, 25)
-            },
-            # Close path to (6, 12)
-            {
-                'type': 'close_path',
-                'end_point': (6, 12)
-            }
-        ]
-
-        straight_arm = draw_curves(start, lines, colors)
-        straight_arm.scale(0.03).move_to(ORIGIN)
-        line = ParametricFunction
-        for line in straight_arm:
-            self.play(Create(line), run_time=5)
-            self.wait(3)
-        self.wait(3)
+        self.play(char.animate_twist_and_shout())
+        self.wait(2)
+        # self.play(char.animate_wave_shift())
+        # self.play(char.animate_wave_half_circle())

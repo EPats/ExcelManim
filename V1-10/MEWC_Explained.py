@@ -13,13 +13,13 @@ from excel_formula import *
 from scenes import NarratedScene
 
 
-class Brackets(NarratedScene):
+class Brackets(Scene):
     ARM_LENGTH = 1
     ARM_BASE_HEIGHT = 0.2
     HIGHLIGHT_SCALE = 3
     HIGHLIGHT_SHRINK = 0.001
     HIGHLIGHT_RUN_TIME = 0.4
-    MOVE_RUN_TIME = 3
+    MOVE_RUN_TIME = 0.8
     GAMMA: float = 0.01
     # COLORS = [WHITE, XKCD.ADOBE, BLUE, GREEN, RED, YELLOW, PURPLE, TEAL, ORANGE, MAROON, PINK,
     #               XKCD.LIME, XKCD.BROWN, XKCD.OLIVE, XKCD.NAVY, XKCD.ARMYGREEN]
@@ -48,7 +48,7 @@ class Brackets(NarratedScene):
         dots = [self.create_dot(color, start_location) for color, start_location in zip(self.COLORS, start_locations)]
         self.play(*[Create(dot) for dot in dots])
         first_bracket = VGroup(*self.animate_bracket(dots), *dots)
-        self.wait(2)
+        self.wait(0.4)
 
         all_brackets = [first_bracket.copy()]
         for i in range(7):
@@ -58,9 +58,9 @@ class Brackets(NarratedScene):
 
         all_brackets_mob = VGroup(*all_brackets)
         all_brackets_mob.arrange_in_grid(2, buff=(0.5, 1.2))
-        all_brackets_mob.scale(0.4)
-        all_brackets_mob.align_to(first_bracket, LEFT + UP)
-        self.play(first_bracket.animate.scale(0.4, about_point=first_bracket.get_corner(UL)), FadeIn(all_brackets_mob[1:]))
+        all_brackets_mob.scale(0.5)
+        all_brackets_mob.move_to(ORIGIN)
+        self.play(first_bracket.animate.move_to(all_brackets_mob[0].get_corner(DR)).scale(0.5, about_point=all_brackets_mob[0].get_corner(UL)), FadeIn(all_brackets_mob[1:]))
         # self.wait(1)
         # static_version.scale([-1, 1, 1])
         # self.add(static_version)
@@ -84,7 +84,7 @@ class Brackets(NarratedScene):
         self.play(MoveAlongPath(winning_dot, win_line, rate_func=rate_functions.ease_out_quad),
                   run_time=self.MOVE_RUN_TIME)
         win_trace.remove_updater(win_updater)
-        crown = (SVGMobject('svg/crown.svg', fill_color=winning_dot.color)
+        crown = (SVGMobject('../svg/crown.svg', fill_color=winning_dot.color)
                  .scale(0.25).move_to(winning_dot.get_center()).shift(UP*0.1))
         objects.append(crown)
         objects.append(win_trace)
@@ -174,7 +174,7 @@ class Brackets(NarratedScene):
         winning_dot = dots[winning_indices[0]]
         winning_line = Line(winning_dot.get_center(), winning_dot.get_center() + RIGHT * self.ARM_LENGTH)
         winning_dot.shift(self.ARM_LENGTH * RIGHT)
-        crown = (SVGMobject('svg/crown.svg', fill_color=winning_dot.color)
+        crown = (SVGMobject('../svg/crown.svg', fill_color=winning_dot.color)
                  .scale(0.25).move_to(winning_dot.get_center()).shift(UP*0.1))
         objects.extend(dots)
         objects.remove(winning_dot)

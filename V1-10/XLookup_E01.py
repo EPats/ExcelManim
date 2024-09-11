@@ -15,12 +15,12 @@ class StylisedXExample(Scene):
     def construct(self):
         x_character: excel_character.XCharacter = excel_character.XCharacter()
 
-        self.play(x_character.get_animation_draw_then_fill(), run_time=4)
+        self.play(x_character.animate_create(), run_time=4)
         self.wait(4)
 
-        self.play(x_character.get_animation_for_look(RIGHT * 9 + UP * 2), run_time=4)
+        self.play(x_character.animate_look(RIGHT * 9 + UP * 2), run_time=4)
         self.wait(4)
-        self.play(x_character.get_animation_for_look(LEFT * 15 + UP * 4), run_time=4)
+        self.play(x_character.animate_look(LEFT * 15 + UP * 4), run_time=4)
         self.play(x_character.animate.shift(UP * 2))
 
 

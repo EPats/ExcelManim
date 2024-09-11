@@ -1,15 +1,8 @@
 import inspect
 import manim
-import os
 import subprocess
 
-import XLookup_E01
-import XLookup_E03
 import excel_character
-import scenes
-import MEWC_Explained
-import XLookup_E02
-
 
 PYTHON_VENV = './venv/Scripts/python.exe'
 
@@ -67,15 +60,15 @@ def create_all_scenes_in_module(module: object, quality: str = 'low') -> None:
 if __name__ == '__main__':
     current_module = excel_character
     current_module_name = current_module.__name__
-    current_scene = 'CharacterAnimation'
+    current_scene = 'Test'
     current_scenes = ['HelperLookups', 'NamedRangeTableExample']
 
     # Prototypes
-    # create_scene(current_module_name, current_scene)
+    create_scene(current_module_name, current_scene)
     # create_multiple_scenes(current_module_name, current_scenes)
     # create_all_scenes_in_module(XLookup_E03)
 
     # High Quality
-    create_scene(current_module_name, current_scene, quality='low')
+    # create_scene(current_module_name, current_scene, quality='high')
     # create_multiple_scenes(current_module_name, current_scenes, quality='high')
     # create_all_scenes_in_module(XLookup_E03, quality='high')

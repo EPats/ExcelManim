@@ -1,8 +1,10 @@
 import typing
 
+import numpy as np
 from manim import *
 from manim.typing import Vector3D
 
+import tex_objs
 from excel_constants import *
 import excel_tables as tables
 import re
@@ -19,7 +21,8 @@ FORMULA_REPLACEMENTS: dict[str, str] = {
     '--': '\\verb|--|',
     ',': ',\n',
     '$': '\\verb|$|',
-    '~': '\\verb|~|'
+    '~': '\\verb|~|',
+    '%': '\%'
 }
 
 REVERSED_FORMULA_REPLACEMENTS: dict[str, str] = {v: k for k, v in FORMULA_REPLACEMENTS.items()}
@@ -29,9 +32,10 @@ class ExcelFormula(VGroup):
     def __init__(self, formula: str, start_location: Vector3D = DEFAULT_FORMULA_START_LOCATION, scale: float = 0.7,
                  color_offset: int = 0, tables_list: list = None, split_lines: bool = True, target_cell: str = '',
                  dynamic_ranges: dict[str, str] = None, tex_color: ManimColor = WHITE, start_align: Vector3D = LEFT,
-                 **kwargs):
+                 nested_indent: float = 0.5, tex_template: TexTemplate = tex_objs.GENTLE_SANS_SERIF, **kwargs):
 
         self.tables = {table.sheet_name: table for table in tables_list} if tables_list else {}
+        self.formula = formula
 
         def parse_excel_formula(formula: str) -> list[tuple[str, str]]:
             # Regular expressions to capture different parts of the formula
@@ -124,7 +128,7 @@ class ExcelFormula(VGroup):
 
         tokens: list[tuple[str, str]] = parse_excel_formula(formula)
         line_tokens: list[list[tuple]] = combine_tokens_to_lines(tokens)
-        tex_mob_lines: list[Tex] = [Tex(*[token[1] for token in line]).scale(scale) for line in line_tokens]
+        tex_mob_lines: list[Tex] = [Tex(*[token[1] for token in line], tex_template=tex_template).scale(scale) for line in line_tokens]
 
         highlights: dict = {}
         highlight_names_to_colors = {}
@@ -139,7 +143,9 @@ class ExcelFormula(VGroup):
                 tex_mob_line.next_to(tex_mob_lines[i - 1], DOWN)
 
             if line_tokens[i][0][0] == 'nested_function':
-                tex_mob_line.align_to(tex_mob_lines[0], LEFT).shift(RIGHT * 0.5 * len(parentheses_open))
+                (tex_mob_line.align_to(tex_mob_lines[0], LEFT)
+                 .shift(RIGHT * (0.5 + (len(parentheses_open) - 1) * nested_indent)))
+                # > .5 + len(parentheses_open) * nested_indent if len(parentheses_open) > 1 else 0.5)))
             elif line_tokens[i][0][0] == 'parentheses_close':
                 tex_mob_line.align_to(parentheses_open[-1][0], LEFT)
             elif line_tokens[i][0][0] != 'main_function':
@@ -148,6 +154,8 @@ class ExcelFormula(VGroup):
                 tex_mob_line.align_to(align_mob, LEFT)
 
             tex_mob: Tex
+            self.required_args = 0
+            self.optional_args = 0
             for j, tex_mob in enumerate(tex_mob_line):
                 match token_type := line_tokens[i][j][0]:
                     case 'range_argument' | 'dynamic_range_argument':
@@ -178,14 +186,19 @@ class ExcelFormula(VGroup):
                         parentheses_open.append((tex_mob, (i, j)))
                     case 'parentheses_close':
                         parentheses_open.pop()
+                    case 'named_argument':
+                        if '[' in tex_mob:
+                            self.optional_args += 1
+                        else:
+                            self.required_args += 1
 
         self.highlights: dict[str, Rectangle] = highlights
-        print(len(self.highlights))
         self.highlight_objs = VGroup(*self.highlights.values())
         self.target_cell = target_cell
         self.formula_box = VGroup()
 
         super().__init__(*tex_mob_lines, **kwargs)
+        self.orig_bracket_pos = self[-1][-1].get_center()
 
         if self.target_cell:
             table = list(self.tables.values())[0] if len(self.tables) == 1 \
@@ -194,8 +207,8 @@ class ExcelFormula(VGroup):
             start_cell, end_cell = table.get_start_end_cells_for_range(self.target_cell)
             formula_box = SurroundingRectangle(start_cell, color=BLACK, stroke_opacity=0, buff=0)
             formula_box_2 = Rectangle(width=self.get_true_width() + 0.2 * 2,
-                                                   height=self.get_true_height() + 0.2 * 2,
-                                                   color=WHITE).move_to(self).shift(UP * 0.02)
+                                      height=self.get_true_height() + 0.2 * 2,
+                                      color=WHITE).move_to(self).shift(UP * 0.02)
 
             self.z_index = 1
             self.formula_box.add(formula_box, formula_box_2)
@@ -229,6 +242,94 @@ class ExcelFormula(VGroup):
                 if gap_between:
                     all_animations.append(Wait(gap_between))
         return Succession(*all_animations)
+
+    def write_line_by_line(self, line_run_time: float = 1.2, gap_between: float = 0) -> Animation:
+        return self.write_all_line_by_line([tex_line for tex_line in self], line_run_time, gap_between)
+
+    def write_all_line_by_line(self, tex_lines, line_run_time: float = 0.8, gap_between: float = 0) -> Animation:
+        all_animations = []
+        line_highlights = []
+        for i, tex_line in enumerate(tex_lines):
+            tex: Tex
+            current_anim = Succession(*[Write(el).set_run_time(min(line_run_time, len(el.tex_string) * 0.3)) for el in tex_line])
+            for j, tex in enumerate(tex_line):
+                if self.highlights and f'{i}:{j}' in self.highlights:
+                    line_highlights.append(Create(self.highlights[f'{i}:{j}']).set_run_time(line_run_time))
+            all_animations.append(AnimationGroup(current_anim, *line_highlights))
+            if gap_between:
+                all_animations.append(Wait(gap_between))
+            line_highlights = []
+        return Succession(*all_animations)
+
+    def write_anim_with_required_arguments_only(self, line_run_time: float = 0.8, gap_between: float = 0):
+        if '[' not in self.formula:
+            return self.write_line_by_line(line_run_time, gap_between)
+
+        closing_bracket = self[-1][-1]
+        required_lines = []
+        hit_optional = False
+        for i, line in enumerate(self):
+            current_line = []
+            if '[' not in line.tex_string:
+                for el in line:
+                    current_line.append(el)
+            for j, el in enumerate(line):
+                if '[' in el.tex_string:
+                    hit_optional = True
+            if current_line:
+                required_lines.append(current_line)
+            if hit_optional:
+                break
+
+        #Remove comma
+        final_line = required_lines.pop(-1)
+        if final_line[-1].tex_string[0] == ',':
+            final_line.pop(-1)
+
+        self.orig_bracket_pos = closing_bracket.get_center()
+        closing_bracket.next_to(final_line[-1], RIGHT, buff=0.1)
+        final_line.append(closing_bracket)
+
+        # closing_bracket.align_to(required_lines[0][1], LEFT)
+        # closing_bracket.next_to(final_line[0], DOWN, coor_mask=np.array([0, 1, 0]))
+        required_lines.append(final_line)
+        # required_lines.append([closing_bracket])
+
+        return self.write_all_line_by_line(required_lines, line_run_time, gap_between)
+
+
+    def reveal_anim_optional_args(self, line_run_time: float = 0.8, gap_between: float = 0):
+        if '[' not in self.formula:
+            return Wait(0.001)
+
+        closing_bracket = self[-1][-1]
+        prev_comma = False
+        required_lines = []
+        for i, line in enumerate(self):
+            current_line = []
+            if '[' not in line.tex_string:
+                continue
+            for j, el in enumerate(line):
+                if '[' in el.tex_string:
+                    if self.required_args and not prev_comma:
+                        if j != 0:
+                            current_line.append(line[j - 1])
+                        else:
+                            required_lines.append([self[i - 1][-1]])
+                        prev_comma = True
+                    for mob in line[j:].submobjects:
+                        current_line.append(mob)
+                    break
+            if current_line:
+                required_lines.append(current_line)
+
+        if required_lines[-1][-1].tex_string == ')':
+            required_lines[-1].pop(-1)
+        write_anim = self.write_all_line_by_line(required_lines, line_run_time, gap_between)
+        bracket_move_anim = closing_bracket.animate(run_time=write_anim.run_time).move_to(self.orig_bracket_pos)
+
+        return AnimationGroup(write_anim, bracket_move_anim)
+
 
     def transform_into(self, new_formula: 'ExcelFormula'):
         transform_text = TransformMatchingTex(self, new_formula)

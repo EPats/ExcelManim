@@ -1,5 +1,3 @@
-from manim import *
-
 import XLookup_E01
 from excel_tables import *
 from excel_formula import *

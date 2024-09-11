@@ -104,9 +104,11 @@ class ExcelTable(MobjectTable):
                     else color2 if i % 2 == start_cell_indices[0] % 2 else color1
                 self.add_highlighted_cell((i, j), color, fill_opacity=opacity)
 
+    def get_background_rectangles(self) -> VGroup:
+        return VGroup(*[mob for mob in self.submobjects if mob.name == "BackgroundRectangle"][::-1])
+
     def get_draw_animation(self, hidden_data: list[tuple[int, int]] = None) -> Animation:
-        background_rectangles = VGroup(
-            *[mob for mob in self.submobjects if mob.name == "BackgroundRectangle"][::-1])
+        background_rectangles = self.get_background_rectangles()
 
         top_left = self.top_left_entry
         headers_col = self.get_col_labels()
@@ -125,7 +127,6 @@ class ExcelTable(MobjectTable):
         else:
             rows = [row[1:] for row in self.get_rows()[1:]]
 
-        anims = []
         if top_left:
             headers_anim = AnimationGroup(Write(top_left), Write(headers_col), Write(headers_row))
         else:
@@ -219,7 +220,8 @@ class ExcelTable(MobjectTable):
 
         return ShowPassingFlash(rectangle, time_width=time_width, run_time=run_time)
 
-    def animate_flash_fill(self, range_str: str, lagged_animations: list[Animation] = None, n_squares: int = 3) -> LaggedStart:
+    def animate_flash_fill(self, range_str: str, lagged_animations: list[Animation] = None, lag_ratio: float = 0.2,
+                           n_squares: int = 3) -> LaggedStart:
         start_cell, end_cell = self.get_start_end_cells_for_range(range_str)
         start_dr = start_cell.get_corner(DR)
         sq = Square(side_length=0.3, color=EP_EXCEL_GREEN, stroke_width=2).move_to(start_dr)
@@ -227,7 +229,7 @@ class ExcelTable(MobjectTable):
         square_anims = [sq.copy().animate.scale(0.001).set_stroke(opacity=0) for _ in range(n_squares)]
         square_anim = LaggedStart(*square_anims, lag_ratio=0.2)
         if lagged_animations:
-            return LaggedStart(square_anim, *lagged_animations, lag_ratio=0.2)
+            return LaggedStart(square_anim, *lagged_animations, lag_ratio=lag_ratio)
         return square_anim
 
 
