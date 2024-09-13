@@ -107,7 +107,7 @@ class ExcelTable(MobjectTable):
     def get_background_rectangles(self) -> VGroup:
         return VGroup(*[mob for mob in self.submobjects if mob.name == "BackgroundRectangle"][::-1])
 
-    def get_draw_animation(self, hidden_data: list[tuple[int, int]] = None) -> Animation:
+    def animate_draw(self, hidden_data: list[tuple[int, int]] = None) -> Animation:
         background_rectangles = self.get_background_rectangles()
 
         top_left = self.top_left_entry

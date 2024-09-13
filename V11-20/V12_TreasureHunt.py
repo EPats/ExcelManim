@@ -35,11 +35,11 @@ class TreasureHuntOpening(Scene):
 
         tex_mobs[2].next_to(tmp_0, RIGHT)
 
-        self.play(tex_mobs[0].get_add_word_by_word_anim(custom_gaps={1: 0, 2: 0, 4: 0, 7: 0}))
+        self.play(tex_mobs[0].animate_add_word_by_word(custom_gaps={1: 0, 2: 0, 4: 0, 7: 0}))
         self.play(Transform(tex_mobs[0], tmp_0),
-                  tex_mobs[1].get_add_word_by_word_anim(custom_gaps={7: 0}))
+                  tex_mobs[1].animate_add_word_by_word(custom_gaps={7: 0}))
         self.play(Transform(tex_mobs[1], tmp_1),
-                  tex_mobs[2].get_add_word_by_word_anim())
+                  tex_mobs[2].animate_add_word_by_word())
 
         self.wait()
         whole_group = VGroup(*tex_mobs)

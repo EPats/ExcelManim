@@ -45,7 +45,7 @@ class LookupExample(Scene):
 
         table = ExcelTable(lookup_table_data)
         table.scale(0.5)
-        self.play(table.get_draw_animation())
+        self.play(table.animate_draw())
         self.wait(3.5)
 
         self.play(table.get_passing_flash('A2:A9', flash_color=YELLOW_E).set_run_time(1.5),
@@ -84,7 +84,7 @@ class XLookup2DExample(Scene):
         # Create and add table to the scene
         table = ExcelTable(lookup_table_data)
         table.scale(0.4).to_edge(RIGHT).shift(DOWN * 0.3)
-        self.play(table.get_draw_animation())
+        self.play(table.animate_draw())
         self.wait(2)
 
         # Create and position formula components
@@ -113,7 +113,7 @@ class VLookup(Scene):
 
         table = ExcelTable(lookup_table_data)
         table.scale(0.4).to_edge(RIGHT).shift(DOWN * 0.3)
-        self.play(dissolve_tex(scene=self, tex=h_lookup), table.get_draw_animation())
+        self.play(dissolve_tex(scene=self, tex=h_lookup), table.animate_draw())
         self.wait(1)
         config.disable_caching = False
 
@@ -210,7 +210,7 @@ class HLookup(Scene):
 class AlignmentTest(Scene):
     def construct(self):
         table = ExcelTable(lookup_table_data).scale(0.4).to_edge(RIGHT).shift(DOWN * 0.3)
-        self.play(table.get_draw_animation())
+        self.play(table.animate_draw())
         formula_str = '=VLOOKUP("Rory",A2:E9,4)'
         formula_1 = ExcelFormula(formula=formula_str)
         formula_1.write_to_scene(self)
@@ -237,7 +237,7 @@ class IndexMatch(Scene):
         table = ExcelTable(lookup_table_data)
         table.scale(0.4).to_edge(RIGHT).shift(DOWN * 0.3)
         title = Tex('INDEX/MATCH').to_edge(UP)
-        self.play(Write(title), table.get_draw_animation())
+        self.play(Write(title), table.animate_draw())
         self.wait(3)
 
 

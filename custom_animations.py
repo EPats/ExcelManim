@@ -53,6 +53,35 @@ def less_bouncy_ease_out_elastic(t: float) -> float:
         return 1 + amplitude * pow(2, -frequency * t) * np.sin((t * oscillations - 0.75) * c4)
 
 
+@unit_interval
+def custom_ease_out_elastic(t: float,
+                            c4: float = (2 * np.pi) / 3,
+                            oscillations: float = 4.5,
+                            amplitude: float = 0.8,
+                            frequency: float = 4) -> float:
+    # c4 is a constant used to control the period of the sine wave
+    # It's approximately 2.0943951023931953, which is 2π/3
+    # This value gives a nice aesthetic "bounce" to the elastic effect
+    # Oscilations - Number of "springs"
+    # Amplitude - Higher = more elastic, lower = less elastic
+    # Frequency - Decay of springs - higher is faster decay
+
+    if t == 0:
+        return 0
+    elif t == 1:
+        return 1
+    else:
+        t = t * t  # Apply some easing to slow down the initial movement
+
+
+        return 1 + amplitude * pow(2, -frequency * t) * np.sin((t * oscillations - 0.75) * c4)
+
+
+@unit_interval
+def there_and_back_sin(t: float) -> float:
+    return -(np.cos(np.pi * t * 2) - 1) / 2
+
+
 class ColorChangeAndRotate(Animation):
     def __init__(
             self,

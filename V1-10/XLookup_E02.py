@@ -54,7 +54,7 @@ class MatchMode(NarratedScene):
         table = ExcelTable(table_data)
         table.scale(0.3).to_edge(DOWN).shift(DOWN * 0.2)
         hidden_data = [(i, 4) for i in range(2, len(books_data) + 1)]
-        self.play(table.get_draw_animation(hidden_data=hidden_data))
+        self.play(table.animate_draw(hidden_data=hidden_data))
         self.wait(2)
 
         formula_str = '=XLOOKUP(C2, $G$2:$G$5, $F$2:$F$5, , -1)'
@@ -152,7 +152,7 @@ class DynamicArraysXLookup(NarratedScene):
         table = ExcelTable(table_data)
         table.scale(0.37).to_edge(DOWN).shift(DOWN * 0.2)
         hidden_data = [(2, 8), (3, 8), (4, 8), (5, 8), (9, 8), (9, 9), (6, 9)]
-        self.play(table.get_draw_animation(hidden_data=hidden_data))
+        self.play(table.animate_draw(hidden_data=hidden_data))
         self.wait(2)
 
         formula_str = '=XLOOKUP(G2:G5, A2:A9, E2:E9)'
@@ -268,7 +268,7 @@ class NotFoundExample(NarratedScene):
         table = ExcelTable(table_data)
         table.scale(0.38).to_edge(DOWN).shift(DOWN * 0.2)
         self.wait(1)
-        self.play(table.get_draw_animation())
+        self.play(table.animate_draw())
         formula_str = '=XLOOKUP(G4, $A$2:$A$9, $D$2:$D$9)'
         formula = ExcelFormula(formula_str, tables_list=[table], split_lines=False, target_cell='H4')
         formula.next_to(table, UP, buff=0.35)
@@ -349,7 +349,7 @@ class NotFoundExample2(NarratedScene):
         table = ExcelTable(table_data)
         table.scale(0.38).to_edge(DOWN).shift(DOWN * 0.2)
         self.wait(1)
-        self.play(table.get_draw_animation())
+        self.play(table.animate_draw())
         formula_str = '=XLOOKUP(G4, $A$2:$A$9, $D$2:$D$9)'
         formula = ExcelFormula(formula_str, tables_list=[table], split_lines=False, target_cell='H4')
         formula.next_to(table, UP, buff=0.35)
@@ -421,7 +421,7 @@ class XLookupReview(Scene):
         title = Tex('XLOOKUP').to_edge(UP)
         self.play(Write(title))
         self.wait(0.5)
-        self.play(table.get_draw_animation())
+        self.play(table.animate_draw())
         self.wait(2)
 
 
@@ -478,7 +478,7 @@ class SearchModesExample(NarratedScene):
         table = ExcelTable(table_data).scale(0.25).to_corner(DL).shift(RIGHT*0.5+DOWN*0.3)
         hidden_cells = [(6,6),(6,7)]
         self.wait(5)
-        self.play(table.get_draw_animation(hidden_data=hidden_cells), run_time=2.5)
+        self.play(table.animate_draw(hidden_data=hidden_cells), run_time=2.5)
 
         hidden_data = [table.get_rows()[i][j] for i, j in hidden_cells]
         formula_str = '=XLOOKUP(E6, A2:A19, C2:C19, , , -1)'

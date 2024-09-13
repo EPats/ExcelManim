@@ -49,7 +49,7 @@ class HelperLookups(Scene):
         table = ExcelTable(table_data).scale(0.25).to_corner(DL).shift(RIGHT * 0.5)
         hidden_cells = [(6, 7)] + [(i, 4) for i in range(1, len(table_data) + 1)]
         hidden_data = [table.get_rows()[i][j] for i, j in hidden_cells]
-        self.play(table.get_draw_animation(hidden_data=hidden_cells), run_time=2.5)
+        self.play(table.animate_draw(hidden_data=hidden_cells), run_time=2.5)
 
         result_cells = hidden_cells.pop(0)
         result = hidden_data.pop(0)
@@ -134,7 +134,7 @@ class ExactExplainer(NarratedScene):
         table = ExcelTable(table_data).scale(s).to_edge(LEFT).shift(DOWN*0.4)
 
         hidden_cells = [(4, 5), *[(i, 3) for i in range(1, len(table_data) + 1)]]
-        self.play(table.get_draw_animation(hidden_data=hidden_cells), run_time=2.5)
+        self.play(table.animate_draw(hidden_data=hidden_cells), run_time=2.5)
 
         wrong_result = [row for row in table_data if row[0].lower() == match.lower()][0][1]
         wrong_result_tex = (Tex(wrong_result, color=BLACK).scale(s)
@@ -209,7 +209,7 @@ class ComplexExplainer(NarratedScene):
         hidden_data = [table.get_rows()[i][j] for i, j in hidden_cells]
 
         self.wait(2)
-        self.play(Write(title), table.get_draw_animation(hidden_data=hidden_cells))
+        self.play(Write(title), table.animate_draw(hidden_data=hidden_cells))
         self.wait(4)
 
         result_cells = hidden_cells.pop(0)
@@ -279,7 +279,7 @@ class NamedRangeTableExample(NarratedScene):
                                start_location=UP + RIGHT * 1, dynamic_ranges=dynamic_ranges)
         hidden_data = [(4, 5)]
 
-        self.play(table.get_draw_animation(hidden_data=hidden_data))
+        self.play(table.animate_draw(hidden_data=hidden_data))
         self.wait(2)
         self.play(formula.write_to_scene())
         self.wait(0.5)
@@ -350,7 +350,7 @@ class WildCardSearch(NarratedScene):
 
         hidden_data_rows = [[table.get_rows()[i][j_vals[0]], table.get_rows()[i][j_vals[1]]] for i in i_vals]
 
-        self.play(table.get_draw_animation(hidden_data=hidden_data))
+        self.play(table.animate_draw(hidden_data=hidden_data))
         self.wait(2)
         self.play(formula.write_to_scene())
         self.wait(2)

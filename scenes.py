@@ -2,6 +2,8 @@ from functools import partial
 
 from manim import *
 
+import custom_animations
+import excel_character
 from excel_character import XCharacter
 from excel_tables import ExcelTable
 
@@ -61,6 +63,67 @@ class NarratedScene(Scene):
     def __init__(self):
         super().__init__()
         create_narration_circle(self)
+
+
+class SubscribeTitle(Scene):
+    def construct(self):
+        def subscribe_click(mob, alpha, original_width):
+            if alpha < 0.5:
+                scale = 1 - 0.2 * alpha
+            else:
+                scale = 0.9 + 0.1 * (alpha - 0.5)
+                if mob[0].color == red_color:
+                    mob[0].set_color(XKCD.DEEPGREEN)
+
+            mob.scale_to_fit_width(original_width * scale)
+
+        red_color = XKCD.TOMATORED
+        subscribe_rectangle = RoundedRectangle(corner_radius=0.2, width=5, height=1,
+                                               color=red_color, fill_color=red_color, fill_opacity=1)
+        subscribe_tex = Text('Subscribe', font='sans-serif').scale(1.3)
+        subscribed_tex = Text('Subscribed', font='sans-serif').scale(1.3)
+        play_button = (Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
+                       .rotate(-90 * DEGREES)
+                       .stretch(1.3, dim=0)
+                       .scale(0.4))
+
+        play_button.corner_radius = 0.05
+        play_button.round_corners(play_button.corner_radius)
+
+        play_button.next_to(subscribe_rectangle, LEFT, buff=-(play_button.width + 0.2))
+        subscribe_tex.next_to(subscribe_rectangle, RIGHT, buff=-(subscribe_tex.width + 0.2))
+
+        play_button.next_to(subscribe_rectangle, ORIGIN, coor_mask=np.array([0, 1, 0]))
+        subscribe_tex.next_to(subscribe_rectangle, ORIGIN, coor_mask=np.array([0, 1, 0]))
+        subscribe_tex.shift(UP * 0.02)
+        subscribed_tex.move_to(subscribe_tex)
+
+        subscribe_button = VGroup(subscribe_rectangle, play_button, subscribe_tex)  #
+
+        subscribe_button.shift(DOWN * 2)
+
+        char = excel_character.XCharacter().scale(2)
+        char.shift(UP * 1)
+
+        subscribe_button.set_opacity(0)
+        sub_anims = [
+            Wait(0.3),
+            subscribe_button.animate(run_time=0.01).set_opacity(1),
+            LaggedStart(DrawBorderThenFill(subscribe_rectangle), DrawBorderThenFill(play_button),
+                        Write(subscribe_tex, run_time=1), lag_ratio=0.3),
+            UpdateFromAlphaFunc(
+                subscribe_button,
+                partial(subscribe_click, original_width=subscribe_button.width)
+            )
+        ]
+
+        self.wait(0.5)
+        self.play(Succession(char.animate_create(),
+                  char.get_puff_animation(rate_func=custom_animations.there_and_back)),
+                  Succession(*sub_anims))
+        self.wait(0.4)
+        self.play(*[FadeOut(mob) for mob in self.mobjects])
+        self.wait()
 
 
 class IntroScene(Scene):

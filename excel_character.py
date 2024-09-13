@@ -8,6 +8,8 @@ from typing_extensions import Self
 from manim import *
 from manim.typing import Vector3D
 import re
+
+import custom_animations
 import excel_constants
 from custom_animations import CreateWithMovement, FadeInWithMovementAndScale
 from excel_tables import ExcelTable
@@ -44,7 +46,7 @@ class Eye(VGroup):
                 (self.eye_background.get_right() if self.is_left else self.eye_background.get_left())
                 + UP * self.eye_background.height * 3 / 10
         )
-        return Line(start_pos, end_pos, color=GREY_BROWN, stroke_width=7)
+        return Line(start_pos, end_pos, color=GREY_BROWN, stroke_width=7, stroke_opacity=0)
 
     def _create_intrigued_eyebrow(self):
         arc = Arc(radius=0.2, color=GREY_BROWN, angle=120 * DEGREES, start_angle=30 * DEGREES,
@@ -53,6 +55,7 @@ class Eye(VGroup):
         arc.next_to(self.eye_background, UP, buff=0.05)
         if not self.is_left:
             arc.points = arc.points[::-1]
+        arc.set_stroke(opacity=0)
         return arc
 
     def _create_surprised_eyebrow(self):
@@ -61,6 +64,7 @@ class Eye(VGroup):
         arc.rotate(10 * DEGREES * (1 if self.is_left else -1), about_point=self.eye_background.get_center())
         if not self.is_left:
             arc.points = arc.points[::-1]
+        arc.set_stroke(opacity=0)
         return arc
 
     def animate_create(self) -> Animation:
@@ -85,6 +89,17 @@ class Eye(VGroup):
 
     def animate_look(self, direction: Vector3D, **kwargs):
         return self.pupil.animate(**kwargs).shift(direction * 0.01)
+
+    def roll(self, angle, start_angle, **kwargs):
+        roll_path = Arc(radius=self.pupil.width * 0.5, angle=angle, start_angle=start_angle)
+        roll_path.move_arc_center_to(self.eye_background.get_center())
+        initial_path = Line(self.pupil.get_center(), roll_path.get_start())
+        path = initial_path.copy().append_points(roll_path.points)
+
+        return MoveAlongPath(self.pupil, path, **kwargs)
+
+    def move_to_centre(self, **kwargs):
+        return self.pupil.animate(**kwargs).move_to(self.eye_background.get_center())
 
     def animate_triangle_eye(self, additional_scale: float = 1, **kwargs) -> Animation:
         triangle_shape = Polygon(ORIGIN + LEFT * 1, ORIGIN + RIGHT * 1 + DOWN * 0.1,
@@ -209,9 +224,7 @@ class XCharacter(VGroup):
         )
 
     def animate_think_eye(self, **kwargs):
-        return self.left_eye.animate_move_eyebrow(relative_movement=UP * 2,
-                                                  rate_func=there_and_back_with_pause,
-                                                  run_time=1.5, **kwargs)
+        return self.left_eye.animate_move_eyebrow(relative_movement=UP * 2, **kwargs)
 
     def animate_hide_eyebrow(self, eyebrow_type: str, **kwargs) -> Animation:
         return AnimationGroup(
@@ -223,6 +236,13 @@ class XCharacter(VGroup):
             eyebrow = eye.eyebrow_expressions.get(eyebrow_type)
             if eyebrow:
                 eyebrow.set_stroke(opacity=0)
+
+    def true_hide_all_eyebrows(self):
+        for eye in self.eyes:
+            for eyebrow_type in eye.eyebrow_expressions:
+                eyebrow = eye.eyebrow_expressions.get(eyebrow_type)
+                if eyebrow or eyebrow_type == 'all':
+                    eyebrow.set_stroke(opacity=0)
 
     def animate_surprised_eyes(self, **kwargs):
         return AnimationGroup(
@@ -261,14 +281,20 @@ class XCharacter(VGroup):
               for eye in self.eyes]
         )
 
+    def animate_roll_eyes(self, angle=4 * PI / 5, start_angle=0, **kwargs):
+        return AnimationGroup(*[eye.roll(angle=angle, start_angle=start_angle, **kwargs) for eye in self.eyes])
+
+    def animate_eyes_centre(self, **kwargs):
+        return AnimationGroup(*[eye.move_to_centre(**kwargs) for eye in self.eyes])
+
     def animate_twist_and_shout(self,
-                                angle: float = PI / 5,
+                                angle: float = PI / 8,
                                 rate_func=there_and_back_with_pause,
+                                axis=UP,
                                 **kwargs) -> Animation:
         center = self.get_center()
         top_y = self.get_top()[1]
         longest_distance = top_y - center[1]
-        self.save_state()
 
         def apply_rotation_to_points(points):
             rotated_points = points.copy()
@@ -277,69 +303,81 @@ class XCharacter(VGroup):
                 if y_distance > 0:
                     rotation_factor = y_distance / longest_distance
                     point_angle = angle * rotation_factor
-                    rot_matrix = rotation_matrix(point_angle, UP)
+                    rot_matrix = rotation_matrix(point_angle, axis)
                     rotated_points[i] = np.dot(rot_matrix, points[i])
             return rotated_points
 
-        # rot_matrix = rotation_matrix(angle, UP)
         return self.animate(rate_func=rate_func, **kwargs).apply_points_function_about_point(
-            apply_rotation_to_points, center, **kwargs
+            apply_rotation_to_points, center
         )
 
+    def animate_walk(self,
+                     dir_right: bool = True,
+                     **kwargs):
+        class Walk(Animation):
+            def __init__(self,
+                         char: XCharacter,
+                         dir_right: bool,
+                         **kwargs):
+                super().__init__(char, **kwargs)
+                self.dir_right: bool = dir_right
+                self.angle = (PI / 3) * (1 if dir_right else -1)
+                if dir_right:
+                    self.first_step_point = (char.straight_arm.get_critical_point(DOWN + RIGHT + IN)
+                                             # + LEFT * width_adjust
+                                             # + UP * height_adjust +
+                                             # + OUT * in_adj
+                                             )
+                    char_copy = (char.copy()
+                                 .rotate(angle=self.angle,
+                                         about_point=self.first_step_point,
+                                         axis=UP)
+                                 .set_z(0))
 
-        # def offset_rotation
-        # # def rotation_calculation(theta: float) -> Vector3D:
-        # #     rot_matrix = rotation_matrix(theta, UP)
-        #
-        # rotation_centre = self.get_center()
-        # farthest_point = self.get_top()
-        # longest_distance = farthest_point[1] - rotation_centre[1]
-        #
-        # # self.apply_points_function_about_point(
-        # #     lambda points: np.dot(points, rotation_matrix(angle * alpha, UP).T), about_point, **kwargs
-        # # )
-        # return UpdateFromAlphaFunc(
-        #     self,
-        #     lambda mob, alpha: mob.become(
-        #         self.copy().apply_points_function_about_point(
-        #             lambda p: np.dot(p, rotation_matrix(angle * alpha, UP).T),
-        #             about_point=rotation_centre
-        #         )
-        #     ),
-        #     **kwargs
-        # )
+                    self.second_step_point = np.array([
+                        (char_copy.curved_arm.get_left() + RIGHT * char_copy.curved_arm.width * 0.1)[0],
+                        (char_copy.curved_arm.get_bottom())[1],
+                        (char_copy.curved_arm.get_critical_point(OUT) + IN * char_copy.curved_arm.depth * 0.1)[2]
+                    ])
+                else:
+                    self.first_step_point = np.array([
+                        (char.curved_arm.get_left() + RIGHT * char.curved_arm.width * 0.1)[0],
+                        (char.curved_arm.get_bottom())[1],
+                        0
+                    ])
 
-        # return self.animate(rate_func=rate_func, **kwargs).rotate(angle=angle, axis=axis, about_point=self.get_center())
+                    char_copy = (char.copy()
+                                 .rotate(angle=self.angle,
+                                         about_point=self.first_step_point,
+                                         axis=UP)
+                                 .set_z(0))
 
-        # animations: list[Animation] = []
-        # start_pos: Vector3D = (config.frame_width / 2 + max(
-        #     [pokemon.width for pokemon in pokemon_group])) * RIGHT + DOWN * 1.5
-        # for pokemon in pokemon_group:
-        #     pokemon_start_width: float = pokemon.width
-        #     pokemon.prev_rotation = 0
-        #
-        #     pokemon_updater = partial(pokemon_carousel,
-        #                               start_width=pokemon_start_width,
-        #                               start_loc=start_pos
-        #                               )
-        #
-        #     animations.append(UpdateFromAlphaFunc(
-        #         pokemon,
-        #         pokemon_updater,
-        #         run_time=10,
-        #         rate_func=rate_functions.ease_out_sine)
-        #     )
-        # return UpdateFromAlphaFunc(
-        #     self,
-        #     lambda mob, alpha: mob.become(
-        #         self.copy().apply_function(
-        #             lambda p: p + wave_function(alpha)
-        #             if (p[0] > tmp_arm.get_center()[0]
-        #                 and p[1] > tmp_arm.get_center()[1])
-        #             else p
-        #         )
-        #     )
-        # ).set_run_time(2)
+                    self.second_step_point = char_copy.get_critical_point(OUT + RIGHT + DOWN)
+
+            def interpolate_mobject(self, alpha: float) -> None:
+                rot_obj = self.starting_mobject.copy()
+                lift_angle = PI / 15
+                if alpha <= 0.5:
+                    adj_alpha = self.rate_func(alpha / 0.5)
+                    rot_angle = self.angle * adj_alpha
+                    rot_obj.rotate(angle=rot_angle, about_point=self.first_step_point, axis=UP)
+                    lift_alpha = rate_functions.there_and_back(adj_alpha)
+                    rot_obj.rotate(angle=lift_angle * lift_alpha, about_point=self.first_step_point,
+                                   axis=IN if self.dir_right else OUT)
+                    rot_obj.set_z(0)
+                    self.mobject.become(rot_obj)
+                else:
+                    adj_alpha = self.rate_func((alpha - 0.5) / 0.5)
+                    rot_angle = -self.angle * adj_alpha
+                    rot_obj.rotate(angle=self.angle, about_point=self.first_step_point, axis=UP).set_z(0)
+                    rot_obj.rotate(angle=rot_angle, about_point=self.second_step_point, axis=UP)
+                    lift_alpha = rate_functions.there_and_back(adj_alpha)
+                    rot_obj.rotate(angle=lift_angle * lift_alpha, about_point=self.second_step_point,
+                                   axis=OUT if self.dir_right else IN)
+                    rot_obj.set_z(0)
+                    self.mobject.become(rot_obj)
+
+        return Walk(self, dir_right=dir_right, **kwargs)
 
     def animate_wave_shift(self):
         def wave_function(t: float):
@@ -520,18 +558,18 @@ class XCharacter(VGroup):
         return (self.rotate_arms(clockwise_curved, clockwise_straight, angle_rad)
                 .set_rate_func(there_and_back))
 
-    def get_arm_flex_animation(self, use_straight_arm: bool = True, bend_multiplier: float = 0.15):
+    def get_arm_flex_animation(self, use_straight_arm: bool = True, bend_multiplier: float = 0.15, **kwargs):
         arm = self.straight_arm if use_straight_arm else self.curved_arm
 
         def flex_function(t: float):
-            bend_amount = bend_multiplier * np.sin(np.pi * t)
+            bend_amount = bend_multiplier * t
 
             def apply_flex(p):
                 x, y, z = p
                 x_min, x_max = arm[0].get_left()[0], arm[0].get_right()[0]
                 x_range = x_max - x_min
                 x_progress = (x - x_min) / x_range
-                return np.array([x, y + bend_amount * np.sin(x_progress * np.pi), z])
+                return np.array([x, y + bend_amount * x_progress, z])
 
             return apply_flex
 
@@ -541,8 +579,9 @@ class XCharacter(VGroup):
             arm[0],
             lambda mob, alpha: mob.become(
                 tmp_arm.copy().apply_function(flex_function(alpha))
-            )
-        ).set_run_time(1.5)
+            ),
+            **kwargs
+        )
 
     def get_flatten_wave_animation(self):
         def waving_rate_func(t: float, inflection: float = 10.0) -> float:
@@ -551,11 +590,11 @@ class XCharacter(VGroup):
 
         return self.get_arm_flatten_animation().set_run_time(2.5).set_rate_func(waving_rate_func)
 
-    def get_arm_flatten_animation(self, flatten_multiplier: float = 0.5):
+    def get_arm_flatten_animation(self, flatten_multiplier: float = 0.5, **kwargs):
         arm = self.curved_arm
 
         def flex_function(t: float):
-            bend_amount = flatten_multiplier * np.sin(np.pi * t) * 0.8
+            bend_amount = flatten_multiplier * t * 0.8
 
             def apply_flex(p):
                 x, y, z = p
@@ -574,49 +613,23 @@ class XCharacter(VGroup):
             arm[0],
             lambda mob, alpha: mob.become(
                 tmp_arm.copy().apply_function(flex_function(alpha))
-            )
-        ).set_run_time(1.5)
+            ),
+            **kwargs
+        )
 
-    def get_puff_animation(self):
+    def get_puff_animation(self, **kwargs):
+        eye_anims = []
+        for eye in self.eyes:
+            mvmt = UP * eye.height / 5
+            eye_anims.append(eye.eye_background.animate(**kwargs).shift(mvmt))
+            eye_anims.append(eye.eye_cover.animate(**kwargs).shift(mvmt))
+            eye_anims.append(eye.pupil.animate(**kwargs).shift(mvmt * 1.5))
 
-        def get_alpha_adj(alpha: float) -> float:
-            return (-math.cos(alpha * PI * 2) + 1) * 0.05
-
-        def get_new_positition(start_pos: Vector3D, v_mov: float, multiplier: float = 1.0) -> Vector3D:
-            return start_pos + v_mov * UP * multiplier
-
-        def move_eye(eye: Eye, alpha: float, start_pos: Vector3D):
-            alpha_adj = get_alpha_adj(alpha)
-            eye.eye_background.move_to(get_new_positition(start_pos, alpha_adj))
-            eye.pupil.move_to(get_new_positition(start_pos, alpha_adj, 1.5))
-
-        def move_eye_cover(cover: Mobject, alpha: float, start_pos: Vector3D):
-            alpha_adj = get_alpha_adj(alpha)
-            cover.move_to(get_new_positition(start_pos, alpha_adj))
-
+        print(f'{kwargs.get("rate_func")=}')
         return AnimationGroup(
-            self.get_arm_flex_animation(),
-            self.get_arm_flatten_animation(),
-            UpdateFromAlphaFunc(
-                self.left_eye,
-                partial(move_eye, start_pos=self.left_eye.get_center()),
-                run_time=1.5
-            ),
-            UpdateFromAlphaFunc(
-                self.right_eye,
-                partial(move_eye, start_pos=self.right_eye.get_center()),
-                run_time=1.5
-            ),
-            UpdateFromAlphaFunc(
-                self.left_eye_cover,
-                partial(move_eye_cover, start_pos=self.left_eye_cover.get_center()),
-                run_time=1.5
-            ),
-            UpdateFromAlphaFunc(
-                self.right_eye_cover,
-                partial(move_eye_cover, start_pos=self.right_eye_cover.get_center()),
-                run_time=1.5
-            )
+            self.get_arm_flex_animation(**kwargs),
+            self.get_arm_flatten_animation(**kwargs),
+            *eye_anims
         )
 
     def get_arm_rotation_animation(self, angle=PI / 16):
@@ -785,6 +798,13 @@ class Test(Scene):
 
         self.play(char.animate_create())
 
+        for _ in range(3):
+            #     self.play(char.animate.rotate(angle=PI/3, axis=UP + IN * 0.1, about_point=char.get_critical_point(DOWN + RIGHT + IN)))
+            #     self.play(char.animate.rotate(angle=-PI/3, axis=UP + OUT * 0.1, about_point=char.get_critical_point(DOWN + LEFT + OUT)))
+
+            self.play(char.animate_walk(rate_func=rate_functions.ease_in_out_sine))
+
+        self.play(char.animate_roll_eyes())
         # self.play(char.animate_intrigued_eyes())
         # self.wait()
         # self.play(char.animate_think_eye())
@@ -811,6 +831,15 @@ class Test(Scene):
         # self.wait(2)
 
         self.play(char.animate_twist_and_shout())
+        self.play(char.animate_eyes_centre())
+
+        for _ in range(3):
+            #     self.play(char.animate.rotate(angle=PI/3, axis=UP + IN * 0.1, about_point=char.get_critical_point(DOWN + RIGHT + IN)))
+            #     self.play(char.animate.rotate(angle=-PI/3, axis=UP + OUT * 0.1, about_point=char.get_critical_point(DOWN + LEFT + OUT)))
+
+            self.play(char.animate_walk(dir_right=False, rate_func=rate_functions.ease_in_out_sine))
+
         self.wait(2)
+
         # self.play(char.animate_wave_shift())
         # self.play(char.animate_wave_half_circle())

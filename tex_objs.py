@@ -56,8 +56,8 @@ class BlockTex(Tex):
             sub_mob.rotate(-PI / 2)
             sub_mob.next_to(self.main_mob if i == 0 else self[-i], RIGHT, buff=buff)
 
-    def get_add_word_by_word_anim(self, gap_between: int = 1, lag_ratio: float = 0.25,
-                                  custom_gaps: dict[int, int | float] | None = None) -> Animation:
+    def animate_add_word_by_word(self, gap_between: int = 1, lag_ratio: float = 0.25,
+                                 custom_gaps: dict[int, int | float] | None = None) -> Animation:
         custom_gaps = custom_gaps or {}
         current_word: int = 1
         anims: list[Animation] = []

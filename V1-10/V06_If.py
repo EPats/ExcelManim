@@ -231,7 +231,7 @@ class PokemonData(NarratedScene):
         hidden_data_cells: list[tuple[int, int]] = [(i, j) for j in [7, 8, 9] for i in
                                                     range(2, len(pokemon_table_data) + 1)]
 
-        self.play(self.pokemon_table.get_draw_animation(hidden_data=hidden_data_cells), run_time=5)
+        self.play(self.pokemon_table.animate_draw(hidden_data=hidden_data_cells), run_time=5)
         self.wait(3)
 
         if_switch_nested_txt: str = ''

@@ -74,7 +74,7 @@ class DataTest(Scene):
     def construct(self):
         tab = excel_tables.ExcelTable(data)
         tab.scale(0.3)
-        self.play(tab.get_draw_animation())
+        self.play(tab.animate_draw())
         self.wait()
 
 
@@ -93,7 +93,7 @@ class NotFound(Scene):
         tab.to_edge(LEFT, buff=0.4)
         tab.shift(DOWN * 0.4)
         # hidden_data = [tab.get_rows()[i][j] for i, j in hidden_cells]
-        self.play(tab.get_draw_animation(hidden_data=hidden_cells))
+        self.play(tab.animate_draw(hidden_data=hidden_cells))
         self.wait(5)
 
         hero_tex = Tex('Batman', color=BLACK).scale(0.22)
@@ -196,7 +196,7 @@ class Examples(Scene):
         for d in hidden_data:
             d.set_opacity(0)
 
-        self.play(tab.get_draw_animation(hidden_data=hidden_cells))
+        self.play(tab.animate_draw(hidden_data=hidden_cells))
         self.wait(8)
         tmp = tab.copy()
         tmp.to_edge(LEFT, buff=0.4)
@@ -456,7 +456,7 @@ class ExamplesOld(Scene):
         tab = excel_tables.ExcelTable(sub_data, broken_row_groups=[['58']])
         tab.scale(0.2).to_edge(LEFT, buff=0.25)
         tab.shift(DOWN * 0.2)
-        self.play(tab.get_draw_animation())
+        self.play(tab.animate_draw())
         self.wait()
 
         sl = tab.get_corner(UR) + RIGHT * 0.8 + DOWN * 0.5

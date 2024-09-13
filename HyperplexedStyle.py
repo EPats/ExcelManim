@@ -31,7 +31,7 @@ class Test(Scene):
         v_text: str = 'Hello,\nWorld'
         v_text_l: str = 'This is my\nfavourite'
         tex: tex_objs.BlockTex = tex_objs.BlockTex(text, post_text=v_text, pre_text=v_text_l)
-        self.play(tex.get_add_word_by_word_anim(custom_gaps={4: 1, 10: 5}), run_time=2)
+        self.play(tex.animate_add_word_by_word(custom_gaps={4: 1, 10: 5}), run_time=2)
         self.wait(2)
         self.play(tex.get_zoom_through_anim(-1, 1), run_time=3)
 
